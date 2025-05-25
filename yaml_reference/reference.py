@@ -34,7 +34,7 @@ class Resolvable(Protocol, Generic[T]):
         """
         return self.__resolved__
 
-    def resolve(self) -> T:
+    def resolve(self, yaml) -> T:
         """
         Resolves the reference.
 
@@ -134,7 +134,7 @@ class Reference(Resolvable[Any]):
 
         data = loader.load(self.path.open("r"))
         if not data:
-            raise ConstructorException(f"Failed to resolve reference: {self.path}")
+            raise ConstructorException(f"Failed to resolve reference: {self.path.absolute()}")
         # setattr(data, "__resolvable__", self)
         self.__resolved_value__ = data
         self.__resolved__ = True

@@ -13,6 +13,9 @@ version = "0.0.0"
 [tool.poetry.requires-plugins]
 poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
 
+[tool.poetry.scripts]
+yref-compile = "yaml_reference.cli:compile_cli"
+
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

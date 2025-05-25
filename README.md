@@ -29,6 +29,34 @@ with open("root.yaml", "r") as f:
 
 Note that the `YAML` class is a direct subclass of the base `ruamel.yaml.YAML` loader class, so the same API applies for customizing how it loads YAML files or other tags.
 
+## CLI interface
+
+There is a CLI interface for this package which can be used to convert a YAML file which contains `!reference` tags into a single YAML file with all the references expanded. This is useful for generating a single file for deployment or other purposes.
+
+```bash
+$ yref-compile -h
+  usage: yref-compile [-h] [-i INPUT] [-o OUTPUT]
+
+  Compile a YAML file containing !reference tags into a new YAML file with resolved references.
+
+  options:
+    -h, --help            show this help message and exit
+    -i INPUT, --input INPUT
+                          Path to the input YAML file. If not provided, reads from stdin.
+    -o OUTPUT, --output OUTPUT
+                          Path to the output YAML file. If not provided, writes to stdout.
+$ yref-compile -i root.yaml
+  version: '3.1'
+  services:
+  - website
+  - database
+  networkConfigs:
+  - network: vpn
+    version: 1.1
+  - network: nfs
+    version: 1.0
+```
+
 ## Acknowledgements
 
 Author(s):
