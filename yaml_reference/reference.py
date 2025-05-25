@@ -1,0 +1,198 @@
+import pprint
+from pathlib import Path
+from typing import Any, Callable, Generic, Protocol, TypeVar, runtime_checkable
+
+from ruamel.yaml import (
+    Constructor,
+    MappingNode,
+    Node,
+    Representer,
+    ScalarNode,
+    yaml_object,
+)
+from ruamel.yaml.reader import Reader
+
+from yaml_reference.errors import ConstructorException
+from yaml_reference.yaml import yaml
+
+# <ruamel.yaml.main.YAML.get_constructor_parser.<locals>.XLoader
+# from ruamel.yaml.main
+
+
+T = TypeVar("T")
+
+
+@runtime_checkable
+class Resolvable(Protocol, Generic[T]):
+    """
+    A protocol that defines a method for resolving a reference.
+
+    Attributes:
+        __resolved__ (bool): Indicates whether the reference has been resolved.
+        __resolved_value__ (T): The resolved value of the reference.
+
+    Methods:
+        resolve() -> T: Resolves the reference.
+    """
+
+    __resolved__: bool
+    __resolved_value__: T
+
+    @property
+    def resolved(self) -> bool:
+        """
+        Indicates whether the reference has been resolved.
+
+        Returns:
+            bool: True if the reference is resolved, False otherwise.
+        """
+        return self.__resolved__
+
+    def resolve(self) -> T:
+        """
+        Resolves the reference.
+
+        Returns:
+            T: The resolved value of the reference.
+        """
+        pass
+
+
+@yaml_object(yaml)
+class Reference(Resolvable[Any]):
+    """
+    A class to represent a reference in a YAML file.
+
+    Attributes:
+        path (str): The path to the referenced file.
+    """
+
+    __local_file__: Path
+    path: Path
+
+    def __init__(self, local_file: Path, path: str):
+        """
+        Initialize the Reference object with a path.
+
+        Args:
+            path (str): The path to the referenced file.
+        """
+        self.__resolved__ = False
+        self.__resolved_value__ = None
+        self.__local_file__ = local_file
+        self.path = local_file.parent / path
+
+    def __repr__(self) -> str:
+        """
+        Return a string representation of the Reference object.
+
+        Returns:
+            str: The string representation of the Reference object.
+        """
+        return f"Reference(path={self.path.relative_to(self.__local_file__.parent)})"
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the Reference object to a dictionary.
+
+        Returns:
+            dict[str, Any]: The dictionary representation of the Reference object.
+        """
+        return {"path": str(self.path.relative_to(self.__local_file__.parent))}
+
+    @classmethod
+    def from_yaml(cls, constructor: Constructor, node: Node) -> "Reference":
+        """
+        Create a Reference object from a YAML node.
+
+        Args:
+            constructor (Constructor): The YAML constructor.
+            node (Node): The YAML node.
+
+        Returns:
+            Reference: The created Reference object.
+        """
+        local_file = Path(yaml.reader.stream.name)
+        if not isinstance(node, MappingNode):
+            raise ConstructorException(f"Invalid node type: {type(node)}")
+        dict_reference = constructor.construct_mapping(node)
+        return cls(local_file, **dict_reference)
+
+    @classmethod
+    def to_yaml(cls, representer: Representer, node: "Reference") -> Node:
+        """
+        Convert a Reference object to a YAML node.
+
+        Args:
+            representer (Representer): The YAML representer.
+            node (Reference): The Reference object.
+
+        Returns:
+            Node: The YAML node representing the Reference object.
+        """
+        if not isinstance(node, Reference):
+            raise ConstructorException(f"Invalid node type: {type(node)}")
+        return representer.represent_scalar("!reference", node.to_dict(), style="flow")
+
+    def resolve(self) -> Any:
+        """
+        Resolve the reference and return the resolved value.
+
+        Returns:
+            Any: The resolved value of the reference.
+        """
+        if self.resolved:
+            return self.__resolved_value__
+
+        data = yaml.load(self.path.open("r"))
+        if not data:
+            raise ConstructorException(f"Failed to resolve reference: {self.path}")
+        self.__resolved_value__ = data
+        self.__resolved__ = True
+        return self.__resolved_value__
+
+
+yaml.constructor.add_constructor("!reference", Reference.from_yaml)
+yaml.representer.add_representer(Reference, Reference.to_yaml)
+
+
+def recursively_resolve(data: Any) -> Any:
+    """
+    Recursively resolve all references in the given data.
+
+    Args:
+        data (Any): The data to resolve references in.
+
+    Returns:
+        Any: The data with all references resolved.
+    """
+    try:
+        if isinstance(data, list):
+            return [recursively_resolve(item) for item in data]
+        elif isinstance(data, dict):
+            return {key: recursively_resolve(value) for key, value in data.items()}
+        elif isinstance(data, Resolvable):
+            return data.resolve()
+        else:
+            return data
+    except ConstructorException as e:
+        raise ConstructorException(f"Error resolving reference: {e}") from e
+    except Exception as e:
+        raise ConstructorException(f"Unexpected error: {e}") from e
+
+
+def recursively_resolve_after(func: Callable) -> Callable:
+    """Decorator to resolve data after a function call.
+
+    Args:
+        func (Callable): Function to be decorated.
+
+    Returns:
+        Callable: Decorated function.
+    """
+
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        return recursively_resolve(result)
+
+    return wrapper
