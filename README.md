@@ -57,6 +57,35 @@ $ yref-compile -i root.yaml
     version: 1.0
 ```
 
+## Anchor references
+
+You can supply the `!reference` / `!reference-all` tags with an anchor name to use for the reference.
+
+```yaml
+# root.yaml
+ports: !reference-all { glob: "networks/*.yaml", anchor: "port"}
+```
+
+```yaml
+# networks/vpn.yaml
+name: vpn
+port: &port 8001
+```
+
+```yaml
+# networks/nfs.yaml
+name: nfs
+port: &port 2000
+```
+
+Loading the `root.yaml` file with the Python interface or converting it with the CLI will result in the following YAML (in no particular order):
+
+```yaml
+ports:
+  - 8001
+  - 2000
+```
+
 ## Acknowledgements
 
 Author(s):
