@@ -1,11 +1,4 @@
-mode: Mainline
-branches:
-  main:
-    regex: ^main$
-    increment: Inherit
-    is-mainline: true
-    prevent-increment-of-merged-branch-version: true
-ignore:
-  sha: []
-commit-message-incrementing: Enabled
-merge-message-strategy: MergeMessage
+mode: MainLine
+major-version-bump-message: '^(major|breaking)'
+minor-version-bump-message: '^(minor|feat)'
+patch-version-bump-message: '^(patch|fix|docs|style|refactor|perf|test|chore|ci)'
