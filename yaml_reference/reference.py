@@ -242,18 +242,19 @@ class ReferenceAll(Resolvable[list[Any]]):
         return self.__resolved_value__
 
 
-def unresolve(data: Any) -> Any:
+def resolve(yaml, data: Any) -> Any:
     """
-    Unresolve a resolved value.
+    Resolve a reference.
 
     Args:
-        data (Any): The resolved value to unresolve.
+        yaml (YAML): The YAML loader.
+        data (Any): The reference to resolve.
 
     Returns:
-        Any: The unresolved data.
+        Any: The resolved data.
     """
-    if hasattr(data, "__resolvable__"):
-        return data.__resolvable__
+    if hasattr(data, "__resolved__"):
+        return data.resolve(yaml)
     return data
 
 
@@ -274,13 +275,51 @@ def recursively_resolve(yaml: Any, data: Any) -> Any:
         elif isinstance(data, dict):
             return {key: recursively_resolve(yaml, value) for key, value in data.items()}
         elif isinstance(data, Resolvable):
-            return data.resolve(yaml)
+            return resolve(yaml, data)
         else:
             return data
     except ConstructorException as e:
         raise ConstructorException(f"Error resolving reference: {e}") from e
     except Exception as e:
         raise ConstructorException(f"Unexpected error: {e}") from e
+
+
+def recursively_resolve_after(yaml, func: Callable) -> Callable:
+    """Decorator to resolve data after a function call.
+
+    Args:
+        yaml (YAML): The YAML loader.
+        func (Callable): Function to be decorated.
+
+    Returns:
+        Callable: Decorated function.
+    """
+
+    def wrapper(*args, **kwargs):
+        result = func(*args, **kwargs)
+        return recursively_resolve(yaml, result)
+
+    return wrapper
+
+
+##
+## Eventually, I'll figure out how to round-trip references and I'll use some sort of "unresolve" API.
+##
+
+
+def unresolve(data: Any) -> Any:
+    """
+    Unresolve a resolved value.
+
+    Args:
+        data (Any): The resolved value to unresolve.
+
+    Returns:
+        Any: The unresolved data.
+    """
+    if hasattr(data, "__resolvable__"):
+        return data.__resolvable__
+    return data
 
 
 def recursively_unresolve(data: Any) -> Any:
@@ -306,24 +345,6 @@ def recursively_unresolve(data: Any) -> Any:
         raise RepresenterException(f"Error unresolving reference: {e}") from e
     except Exception as e:
         raise RepresenterException(f"Unexpected error: {e}") from e
-
-
-def recursively_resolve_after(yaml, func: Callable) -> Callable:
-    """Decorator to resolve data after a function call.
-
-    Args:
-        yaml (YAML): The YAML loader.
-        func (Callable): Function to be decorated.
-
-    Returns:
-        Callable: Decorated function.
-    """
-
-    def wrapper(*args, **kwargs):
-        result = func(*args, **kwargs)
-        return recursively_resolve(yaml, result)
-
-    return wrapper
 
 
 def recursively_unresolve_before(func: Callable) -> Callable:
