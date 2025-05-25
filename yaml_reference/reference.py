@@ -3,6 +3,7 @@ from typing import Any, Callable, Generic, Protocol, TypeVar, runtime_checkable
 
 from ruamel.yaml import BaseConstructor, Constructor, MappingNode, Node, Representer
 
+from yaml_reference import anchor
 from yaml_reference.errors import ConstructorException, RepresenterException
 
 T = TypeVar("T")
@@ -54,18 +55,22 @@ class Reference(Resolvable[Any]):
 
     __local_file__: Path
     path: Path
+    anchor: str | None
 
-    def __init__(self, local_file: Path, path: str):
+    def __init__(self, local_file: Path, path: str, anchor: str | None = None):
         """
         Initialize the Reference object with a path.
 
         Args:
-            path (str): The path to the referenced file.
+            local_file (Path): The path to the local file containing the reference.
+            path (str): The path argument of the reference.
+            anchor (str, optional): The anchor name. Defaults to None.
         """
         self.__resolved__ = False
         self.__resolved_value__ = None
         self.__local_file__ = local_file
         self.path = local_file.parent / path
+        self.anchor = anchor
 
     def __repr__(self) -> str:
         """
@@ -74,7 +79,8 @@ class Reference(Resolvable[Any]):
         Returns:
             str: The string representation of the Reference object.
         """
-        return f"Reference(path={self.path.relative_to(self.__local_file__.parent)})"
+        anchor_suffix = f"#{self.anchor}" if self.anchor else ""
+        return f"Reference(path={self.path.relative_to(self.__local_file__.parent)}{anchor_suffix})"
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -83,7 +89,10 @@ class Reference(Resolvable[Any]):
         Returns:
             dict[str, Any]: The dictionary representation of the Reference object.
         """
-        return {"path": str(self.path.relative_to(self.__local_file__.parent))}
+        path_dict = {"path": str(self.path.relative_to(self.__local_file__.parent))}
+        if self.anchor:
+            path_dict["anchor"] = self.anchor
+        return path_dict
 
     @classmethod
     def from_yaml(cls, constructor: Constructor, node: Node) -> "Reference":
@@ -132,9 +141,13 @@ class Reference(Resolvable[Any]):
         if self.resolved:
             return self.__resolved_value__
 
-        data = loader.load(self.path.open("r"))
-        if not data:
-            raise ConstructorException(f"Failed to resolve reference: {self.path.absolute()}")
+        try:
+            if self.anchor:
+                data = anchor.load_anchor_from_file(loader, self.path.open("r"), self.anchor)
+            else:
+                data = loader.load(self.path.open("r"))
+        except Exception as e:
+            raise ConstructorException(f"Failed to resolve reference: {self.path.absolute()}\nException:\n{e}") from e
         # setattr(data, "__resolvable__", self)
         self.__resolved_value__ = data
         self.__resolved__ = True
@@ -151,20 +164,24 @@ class ReferenceAll(Resolvable[list[Any]]):
 
     __local_file__: Path
     glob: str
-    paths: list[Path]
+    anchor: str | None
+    paths: list[Path]  # List of paths matching the glob pattern
 
-    def __init__(self, local_file: Path, glob: str):
+    def __init__(self, local_file: Path, glob: str, anchor: str | None = None):
         """
         Initialize the ReferenceAll object with a glob pattern.
 
         Args:
+            local_file (Path): The path to the local file containing the reference.
             glob (str): The glob pattern to match files.
+            anchor (str, optional): The anchor name. Defaults to None.
         """
         self.__resolved__ = False
         self.__resolved_value__ = None
         self.__local_file__ = local_file
         self.glob = glob
         self.paths = list(local_file.parent.glob(glob))
+        self.anchor = anchor
 
     def __repr__(self) -> str:
         """
@@ -173,7 +190,8 @@ class ReferenceAll(Resolvable[list[Any]]):
         Returns:
             str: The string representation of the ReferenceAll object.
         """
-        return f"ReferenceAll(glob={self.glob})"
+        anchor_suffix = f"#{self.anchor}" if self.anchor else ""
+        return f"ReferenceAll(glob={self.glob}{anchor_suffix})"
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -182,7 +200,10 @@ class ReferenceAll(Resolvable[list[Any]]):
         Returns:
             dict[str, Any]: The dictionary representation of the ReferenceAll object.
         """
-        return {"glob": str(self.glob)}
+        glob_dict = {"glob": str(self.glob)}
+        if self.anchor:
+            glob_dict["anchor"] = self.anchor
+        return glob_dict
 
     @classmethod
     def from_yaml(cls, constructor: Constructor, node: Node) -> "ReferenceAll":
@@ -233,7 +254,10 @@ class ReferenceAll(Resolvable[list[Any]]):
 
         data = []
         for path in self.paths:
-            data.append(loader.load(path.open("r")))
+            if self.anchor:
+                data.append(anchor.load_anchor_from_file(loader, path.open("r"), self.anchor))
+            else:
+                data.append(loader.load(path.open("r")))
         if not data:
             raise ConstructorException(f"Failed to resolve reference: {self.glob}")
         # setattr(data, "__resolvable__", self)
@@ -253,7 +277,7 @@ def resolve(yaml, data: Any) -> Any:
     Returns:
         Any: The resolved data.
     """
-    if hasattr(data, "__resolved__"):
+    if hasattr(data, "__resolved__") and hasattr(data, "resolve"):
         return data.resolve(yaml)
     return data
 
