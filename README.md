@@ -41,6 +41,17 @@ with open("root.yaml", "r") as f:
 
 Note that the `YAML` class is a direct subclass of the base `ruamel.yaml.YAML` loader class, so the same API applies for customizing how it loads YAML files or other tags (e.g. `yaml = YAML(typ='safe')`).
 
+### VSCode squigglies
+
+To get red of red squigglies in VSCode when using the `!reference` and `!reference-all` tags, you can add the following to your `settings.json` file:
+
+```json
+    "yaml.customTags": [
+        "!reference mapping",
+        "!reference-all mapping"
+    ]
+```
+
 ## CLI interface
 
 There is a CLI interface for this package which can be used to convert a YAML file which contains `!reference` tags into a single YAML file with all the references expanded. This is useful for generating a single file for deployment or other purposes.
