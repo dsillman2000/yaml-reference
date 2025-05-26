@@ -1,11 +1,39 @@
 [project]
 name = "yaml-reference"
 dynamic = ["version"]
-description = ""
+description = "Extension package built on top of  `ruamel.yaml` to support cross-file references in YAML files using tags `!reference` and `!reference-all`."
 authors = [{ name = "David Sillman", email = "dsillman2000@gmail.com" }]
 readme = "README.md"
+license = "MIT"
 requires-python = ">=3.9,<4.0"
 dependencies = ["ruamel-yaml (>=0.18.11,<0.19.0)", "jmespath (>=1.0.1,<2.0.0)"]
+keywords = [
+    "yaml",
+    "yml",
+    "reference",
+    "yaml-reference",
+    "ruamel",
+    "ruamel-yaml",
+    "jmespath",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    # Indicate who your project is intended for
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: File Formats",
+    "Topic :: Utilities",
+
+    # Specify the Python versions you support here.
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Repository = "https://github.com/dsillman2000/yaml-reference.git"
 
 [tool.poetry]
 version = "0.0.0"
