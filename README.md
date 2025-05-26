@@ -2,6 +2,15 @@
 
 Using `ruamel.yaml`, support cross-file references in YAML files using tags `!reference` and `!reference-all`.
 
+Install the package from PyPI with:
+
+```bash
+# pip
+pip install yaml-reference
+# poetry
+poetry add yaml-reference
+```
+
 ## Example
 
 ```yaml
