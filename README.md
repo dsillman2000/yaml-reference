@@ -30,7 +30,7 @@ with open("root.yaml", "r") as f:
     data = yaml.load(f)
 ```
 
-Note that the `YAML` class is a direct subclass of the base `ruamel.yaml.YAML` loader class, so the same API applies for customizing how it loads YAML files or other tags.
+Note that the `YAML` class is a direct subclass of the base `ruamel.yaml.YAML` loader class, so the same API applies for customizing how it loads YAML files or other tags (e.g. `yaml = YAML(typ='safe')`).
 
 ## CLI interface
 

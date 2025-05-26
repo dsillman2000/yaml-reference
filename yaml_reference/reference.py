@@ -106,7 +106,10 @@ class Reference(Resolvable[Any]):
         Returns:
             Reference: The created Reference object.
         """
-        local_file = Path(constructor.loader.reader.stream.name)
+        # local_file = Path(constructor.loader.reader.stream.name)
+        if not hasattr(constructor, "stream_name"):
+            raise ConstructorException("Constructor does not have a 'stream_name' attribute.")
+        local_file = Path(getattr(constructor, "stream_name", None))
         if not isinstance(node, MappingNode):
             raise ConstructorException(f"Invalid node type: {type(node)}")
         dict_reference = BaseConstructor.construct_mapping(constructor, node)  # construct_mapping(node, maptyp={})
@@ -217,7 +220,10 @@ class ReferenceAll(Resolvable[list[Any]]):
         Returns:
             ReferenceAll: The created ReferenceAll object.
         """
-        local_file = Path(constructor.loader.reader.stream.name)
+        # local_file = Path(constructor.loader.reader.stream.name)
+        if not hasattr(constructor, "stream_name"):
+            raise ConstructorException("Constructor does not have a 'stream_name' attribute.")
+        local_file = Path(getattr(constructor, "stream_name", None))
         if not isinstance(node, MappingNode):
             raise ConstructorException(f"Invalid node type: {type(node)}")
         dict_reference = BaseConstructor.construct_mapping(constructor, node)
