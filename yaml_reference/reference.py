@@ -254,10 +254,15 @@ class ReferenceAll(Resolvable[list[Any]]):
 
         data = []
         for path in self.paths:
-            if self.anchor:
-                data.append(anchor.load_anchor_from_file(loader, path.open("r"), self.anchor))
-            else:
-                data.append(loader.load(path.open("r")))
+            # we need to purge anchors from all loaded results.
+            anchored_yaml_stream = path.open("r")
+            anchorless_yaml_stream = anchor.purge_anchors(loader, path.open("r"))
+            next_data = (
+                anchor.load_anchor_from_file(loader, anchored_yaml_stream, self.anchor)
+                if self.anchor
+                else loader.load(anchorless_yaml_stream)
+            )
+            data.append(next_data)
         if not data:
             raise ConstructorException(f"Failed to resolve reference: {self.glob}")
         # setattr(data, "__resolvable__", self)

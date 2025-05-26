@@ -8,13 +8,16 @@ Using `ruamel.yaml`, support cross-file references in YAML files using tags `!re
 # root.yaml
 version: "3.1"
 services:
-  - !reference {
+  - !reference
     path: "services/website.yaml"
-  }
-  - !reference {
+
+  - !reference
     path: "services/database.yaml"
-  }
-networkConfigs: !reference-all { glob: "networks/*.yaml" }
+
+networkConfigs:
+  !reference-all
+  glob: "networks/*.yaml"
+
 ```
 
 Supposing there are `services/website.yaml` and `services/database.yaml` files in the same directory as `root.yaml`, and a `networks` directory with YAML files, the above will be expanded to account for the referenced files with the following Python code:
@@ -63,7 +66,10 @@ You can supply the `!reference` / `!reference-all` tags with an anchor name to u
 
 ```yaml
 # root.yaml
-ports: !reference-all { glob: "networks/*.yaml", anchor: "port"}
+ports:
+  !reference-all
+  glob: "networks/*.yaml"
+  anchor: "port"
 ```
 
 ```yaml

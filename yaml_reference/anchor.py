@@ -1,5 +1,4 @@
 import io
-import pprint
 from typing import IO, Any
 
 from ruamel.yaml import (
@@ -35,12 +34,15 @@ def load_anchor_from_file(yaml: YAML, stream: IO, anchor: str) -> Any:
     events: list[Event] = []
     for event in yaml.parse(stream):
         if isinstance(event, ScalarEvent) and event.anchor == anchor:
+            event.anchor = None
             events = [event]
             break
         elif isinstance(event, MappingStartEvent) and event.anchor == anchor:
+            event.anchor = None
             events = [event]
             level = 1
         elif isinstance(event, SequenceStartEvent) and event.anchor == anchor:
+            event.anchor = None
             events = [event]
             level = 1
         elif level > 0:
@@ -63,3 +65,32 @@ def load_anchor_from_file(yaml: YAML, stream: IO, anchor: str) -> Any:
     _yaml.emit(events, strio)
     strio.seek(0)
     return yaml.load(strio)
+
+
+def purge_anchors(yaml: YAML, stream: IO) -> IO:
+    """
+    Purge all anchors from the YAML stream.
+
+    Args:
+        yaml (YAML): The YAML loader object.
+        stream (IO): A file-like object containing the YAML data.
+
+    Returns:
+        IO: A file-like stream of YAML data with anchors removed.
+    """
+    events = list(yaml.parse(stream))
+    for i in range(len(events)):
+        if isinstance(events[i], ScalarEvent):
+            events[i].anchor = None
+        elif isinstance(events[i], MappingStartEvent):
+            events[i].anchor = None
+        elif isinstance(events[i], SequenceStartEvent):
+            events[i].anchor = None
+    # Ensure we inherit the "stream name"
+    strio = io.StringIO()
+    setattr(strio, "name", stream.name)
+    # Get a fresh YAML instance
+    _yaml = yaml.__class__()
+    _yaml.emit(events, strio)
+    strio.seek(0)
+    return strio
