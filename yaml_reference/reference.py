@@ -6,6 +6,23 @@ from ruamel.yaml import BaseConstructor, Constructor, MappingNode, Node, Represe
 from yaml_reference import anchor
 from yaml_reference.errors import ConstructorException, RepresenterException
 
+
+def jmespath_search(data: Any, jmespath_expr: str) -> Any:
+    """
+    Perform a JMESPath search on the given data.
+
+    Args:
+        data (Any): The data to search.
+        jmespath_expr (str): The JMESPath expression to use for searching.
+
+    Returns:
+        Any: The result of the JMESPath search.
+    """
+    import jmespath
+
+    return jmespath.search(jmespath_expr, data)
+
+
 T = TypeVar("T")
 
 
@@ -55,9 +72,10 @@ class Reference(Resolvable[Any]):
 
     __local_file__: Path
     path: Path
-    anchor: str | None
+    anchor: str | None  # Optional anchor name to reference in the file
+    jmespath: str | None  # Optional JMESPath expression to extract a specific value from the file
 
-    def __init__(self, local_file: Path, path: str, anchor: str | None = None):
+    def __init__(self, local_file: Path, path: str, anchor: str | None = None, jmespath: str | None = None):
         """
         Initialize the Reference object with a path.
 
@@ -65,12 +83,14 @@ class Reference(Resolvable[Any]):
             local_file (Path): The path to the local file containing the reference.
             path (str): The path argument of the reference.
             anchor (str, optional): The anchor name. Defaults to None.
+            jmespath (str, optional): The JMESPath expression. Defaults to None.
         """
         self.__resolved__ = False
         self.__resolved_value__ = None
         self.__local_file__ = local_file
         self.path = local_file.parent / path
         self.anchor = anchor
+        self.jmespath = jmespath
 
     def __repr__(self) -> str:
         """
@@ -80,7 +100,8 @@ class Reference(Resolvable[Any]):
             str: The string representation of the Reference object.
         """
         anchor_suffix = f"#{self.anchor}" if self.anchor else ""
-        return f"Reference(path={self.path.relative_to(self.__local_file__.parent)}{anchor_suffix})"
+        jmespath_suffix = f", jmespath={self.jmespath}" if self.jmespath else ""
+        return f"Reference(path={self.path.relative_to(self.__local_file__.parent)}{anchor_suffix}{jmespath_suffix})"
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -92,6 +113,8 @@ class Reference(Resolvable[Any]):
         path_dict = {"path": str(self.path.relative_to(self.__local_file__.parent))}
         if self.anchor:
             path_dict["anchor"] = self.anchor
+        if self.jmespath:
+            path_dict["jmespath"] = self.jmespath
         return path_dict
 
     @classmethod
@@ -112,7 +135,7 @@ class Reference(Resolvable[Any]):
         local_file = Path(getattr(constructor, "stream_name", None))
         if not isinstance(node, MappingNode):
             raise ConstructorException(f"Invalid node type: {type(node)}")
-        dict_reference = BaseConstructor.construct_mapping(constructor, node)  # construct_mapping(node, maptyp={})
+        dict_reference = BaseConstructor.construct_mapping(constructor, node)
         return cls(local_file, **dict_reference)
 
     @classmethod
@@ -149,6 +172,12 @@ class Reference(Resolvable[Any]):
                 data = anchor.load_anchor_from_file(loader, self.path.open("r"), self.anchor)
             else:
                 data = loader.load(self.path.open("r"))
+            if self.jmespath:
+                data = jmespath_search(data, self.jmespath)
+        except ImportError as e:
+            raise ConstructorException(
+                "JMESPath expression is not supported because the 'jmespath' package is not installed.\n" + str(e)
+            ) from e
         except Exception as e:
             raise ConstructorException(f"Failed to resolve reference: {self.path.absolute()}\nException:\n{e}") from e
         # setattr(data, "__resolvable__", self)
@@ -167,10 +196,11 @@ class ReferenceAll(Resolvable[list[Any]]):
 
     __local_file__: Path
     glob: str
-    anchor: str | None
+    anchor: str | None  # Optional anchor name to reference in each of the files
+    jmespath: str | None  # Optional JMESPath expression to extract a specific value from each of the files
     paths: list[Path]  # List of paths matching the glob pattern
 
-    def __init__(self, local_file: Path, glob: str, anchor: str | None = None):
+    def __init__(self, local_file: Path, glob: str, anchor: str | None = None, jmespath: str | None = None):
         """
         Initialize the ReferenceAll object with a glob pattern.
 
@@ -178,6 +208,7 @@ class ReferenceAll(Resolvable[list[Any]]):
             local_file (Path): The path to the local file containing the reference.
             glob (str): The glob pattern to match files.
             anchor (str, optional): The anchor name. Defaults to None.
+            jmespath (str, optional): The JMESPath expression. Defaults to None.
         """
         self.__resolved__ = False
         self.__resolved_value__ = None
@@ -185,6 +216,7 @@ class ReferenceAll(Resolvable[list[Any]]):
         self.glob = glob
         self.paths = list(local_file.parent.glob(glob))
         self.anchor = anchor
+        self.jmespath = jmespath
 
     def __repr__(self) -> str:
         """
@@ -194,7 +226,8 @@ class ReferenceAll(Resolvable[list[Any]]):
             str: The string representation of the ReferenceAll object.
         """
         anchor_suffix = f"#{self.anchor}" if self.anchor else ""
-        return f"ReferenceAll(glob={self.glob}{anchor_suffix})"
+        jmespath_suffix = f", jmespath={self.jmespath}" if self.jmespath else ""
+        return f"ReferenceAll(glob={self.glob}{anchor_suffix}{jmespath_suffix})"
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -268,6 +301,8 @@ class ReferenceAll(Resolvable[list[Any]]):
                 if self.anchor
                 else loader.load(anchorless_yaml_stream)
             )
+            if self.jmespath:
+                next_data = jmespath_search(next_data, self.jmespath)
             data.append(next_data)
         if not data:
             raise ConstructorException(f"Failed to resolve reference: {self.glob}")
@@ -397,4 +432,5 @@ def recursively_unresolve_before(func: Callable) -> Callable:
         args = (result,) + args[1:]
         return func(*args, **kwargs)
 
+    return wrapper
     return wrapper

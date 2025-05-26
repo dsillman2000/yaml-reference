@@ -92,6 +92,45 @@ ports:
   - 2000
 ```
 
+## JMESPath functionality
+
+You can also use JMESPath expressions to filter the results of references:
+
+```yaml
+# furthest.yml
+furthest-town-name:
+  !reference
+  path: "towns/all.yml"
+  jmespath: "max_by(towns, &distance).name"
+```
+
+```yaml
+#towns/all.yml
+towns:
+  !reference-all
+  glob: "towns/*.yml"
+```
+
+```yaml
+# towns/los_altos.yml
+name: Los Altos
+distance: 10
+# towns/sunnyvale.yml
+name: Sunnyvale
+distance: 5
+# towns/mountain_view.yml
+name: Mountain View
+distance: 15
+```
+
+Using the CLI or Python interface for loading the root `furthes.yml` file will yield the following result:
+
+```yaml
+furthest-town-name: Mountain View
+```
+
+See more information about JMESPath expressions in the [JMESPath documentation](https://jmespath.org/).
+
 ## Acknowledgements
 
 Author(s):

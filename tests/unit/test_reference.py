@@ -116,3 +116,50 @@ def test_reference_all_anchor_load(stage_files):
         "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris\nnisi ut aliquip ex ea commodo consequat."
         in data["contents"]
     )
+
+
+def test_reference_jmespath_load(stage_files):
+    from yaml_reference import YAML
+
+    yaml = YAML()
+
+    files = {
+        "test.yml": "item: !reference\n  path: data.yml\n  jmespath: items[?name=='item1']",
+        "data.yml": "items:\n  - name: item1\n    value: value1\n  - name: item2\n    value: value2\n",
+    }
+    stg = stage_files(files)
+    data = yaml.load(stg / "test.yml")
+    assert data["item"] == [{"name": "item1", "value": "value1"}]
+
+    files["data.yml"] = "items:\n  !reference-all\n  glob: items/item-*.yml\n"
+    files["items/item-1.yml"] = "name: item1\nvalue: value1\n"
+    files["items/item-2.yml"] = "name: item2\nvalue: value2\n"
+    files["items/item-3.yml"] = "name: item3\nvalue: value3\n"
+    files["test.yml"] = "item: !reference\n  path: data.yml\n  jmespath: items[?name=='item1'] | [0]"
+    stg = stage_files(files)
+    data = yaml.load(stg / "test.yml")
+    assert data["item"] == {"name": "item1", "value": "value1"}
+
+    files["test.yml"] = "item: !reference\n  path: data.yml\n  jmespath: max_by(items, &value)"
+    stg = stage_files(files)
+    data = yaml.load(stg / "test.yml")
+    assert data["item"] == {"name": "item3", "value": "value3"}
+
+
+def test_reference_all_jmespath_load(stage_files):
+    from yaml_reference import YAML
+
+    yaml = YAML()
+
+    files = {
+        "test.yml": "items: !reference-all\n  glob: ./data/*.yml\n  jmespath: name",
+        "data/item1.yml": "name: item1\nvalue: value1\n",
+        "data/item2.yml": "name: item2\nvalue: value2\n",
+        "data/item3.yml": "name: item3\nvalue: value3\n",
+    }
+    stg = stage_files(files)
+    data = yaml.load(stg / "test.yml")
+    assert len(data["items"]) == 3
+    assert "item1" in data["items"]
+    assert "item2" in data["items"]
+    assert "item3" in data["items"]
