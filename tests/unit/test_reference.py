@@ -163,3 +163,24 @@ def test_reference_all_jmespath_load(stage_files):
     assert "item1" in data["items"]
     assert "item2" in data["items"]
     assert "item3" in data["items"]
+
+
+def test_reference_merge(stage_files):
+    from yaml_reference import YAML
+
+    yaml = YAML()
+
+    files = {
+        "test.yml": "merged:\n  <<:\n    - !reference { path: ./inner1.yml }\n    - !reference { path: ./inner2.yml }\n",
+        # "test.yml": "merged:\n  <<:\n    - { key1: value1, key2: value2 }\n    - { key3: value3, key4: value4 }\n",
+        "inner1.yml": "key1: value1\nkey2: value2\n",
+        "inner2.yml": "key3: value3\nkey4: value4\n",
+    }
+    stg = stage_files(files)
+    data = yaml.load(stg / "test.yml")
+    assert data["merged"] == {
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3",
+        "key4": "value4",
+    }
