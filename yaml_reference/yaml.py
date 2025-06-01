@@ -3,25 +3,7 @@ from typing import IO, Callable
 from ruamel.yaml import YAML as _YAML
 from ruamel.yaml import Constructor, RoundTripConstructor
 
-from yaml_reference.reference import (
-    Reference,
-    ReferenceAll,
-    recursively_resolve_after,
-    recursively_unresolve_before,
-)
-
-
-def _attach_stream_name_to_constructor(yaml, func: Callable) -> Callable:
-    def wrapper(*args, **kwargs):
-        stream = args[0] if args else kwargs.get("stream")
-        yaml.constructor.stream_name = stream.name
-        yaml.Constructor.stream_name = stream.name
-        rval = func(*args, **kwargs)
-        yaml.constructor.stream_name = None
-        yaml.Constructor.stream_name = None
-        return rval
-
-    return wrapper
+from yaml_reference.reference import Reference, ReferenceAll, recursively_resolve
 
 
 class YAML(_YAML):
@@ -36,12 +18,34 @@ class YAML(_YAML):
         # I'm not sure which of these I should use, so I'll attach the state to both.
         setattr(self.constructor, "stream_name", None)
         setattr(self.Constructor, "stream_name", None)
-        self.load = _attach_stream_name_to_constructor(self, recursively_resolve_after(self, self.load))
-        self.load_all = _attach_stream_name_to_constructor(self, recursively_resolve_after(self, self.load_all))
         # self.representer.add_representer(Reference, Reference.to_yaml)
         # self.representer.add_representer(ReferenceAll, ReferenceAll.to_yaml)
         # self.dump = recursively_unresolve_before(self.dump)
         # self.dump_all = recursively_unresolve_before(self.dump_all)
+
+    def load(self, stream: IO, *args, **kwargs):
+        """
+        Load a YAML document from a stream. Internally stores the stream name for referenced filename resolution.
+        """
+        self.constructor.stream_name = stream.name
+        self.Constructor.stream_name = stream.name
+        load_result = _YAML.load(self, stream, *args, **kwargs)
+        resolved_result = recursively_resolve(self, load_result)
+        self.constructor.stream_name = None
+        self.Constructor.stream_name = None
+        return resolved_result
+
+    def load_all(self, stream: IO, *args, **kwargs):
+        """
+        Load all YAML documents from a stream. Internally stores the stream name for referenced filename resolution.
+        """
+        self.constructor.stream_name = stream.name
+        self.Constructor.stream_name = stream.name
+        load_all_result = _YAML.load_all(self, stream, *args, **kwargs)
+        resolved_result = [recursively_resolve(self, doc) for doc in load_all_result]
+        self.constructor.stream_name = None
+        self.Constructor.stream_name = None
+        return resolved_result
 
 
 __all__ = ["YAML"]
