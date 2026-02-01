@@ -17,18 +17,17 @@ def compile_main(
     yaml = YAML()
 
     if input_file is None:
-        input_file = sys.stdin.read()
-        input_file = Path(input_file)
+        input_handle = sys.stdin
     else:
-        input_file = Path(input_file)
+        input_handle = Path(input_file).open("r")
 
     if output_file is None:
-        output_file = sys.stdout
+        output_handle = sys.stdout
     else:
-        output_file = Path(output_file)
+        output_handle = Path(output_file).open("w")
 
-    data = yaml.load(input_file)
-    yaml.dump(data, output_file)
+    data = yaml.load(input_handle)
+    yaml.dump(data, output_handle)
 
 
 def compile_cli():
