@@ -1,19 +1,19 @@
-from typing import IO, Callable
+from typing import Callable
 
 from ruamel.yaml import YAML as _YAML
-from ruamel.yaml import Constructor, RoundTripConstructor
 
 from yaml_reference.reference import (
     Reference,
     ReferenceAll,
     recursively_resolve_after,
-    recursively_unresolve_before,
 )
 
 
 def _attach_stream_name_to_constructor(yaml, func: Callable) -> Callable:
     def wrapper(*args, **kwargs):
         stream = args[0] if args else kwargs.get("stream")
+        if stream is None or not hasattr(stream, "name"):
+            raise ValueError(f"Stream {stream} must have a name attribute")
         yaml.constructor.stream_name = stream.name
         yaml.Constructor.stream_name = stream.name
         rval = func(*args, **kwargs)

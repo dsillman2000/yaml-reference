@@ -1,5 +1,13 @@
 from pathlib import Path
-from typing import Any, Callable, Generic, Protocol, TypeVar, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Optional,
+    Protocol,
+    TypeVar,
+    runtime_checkable,
+)
 
 from ruamel.yaml import BaseConstructor, Constructor, MappingNode, Node, Representer
 
@@ -59,7 +67,7 @@ class Resolvable(Protocol, Generic[T]):
         Returns:
             T: The resolved value of the reference.
         """
-        pass
+        raise NotImplementedError("Subclasses must implement this method")
 
 
 class Reference(Resolvable[Any]):
@@ -72,10 +80,16 @@ class Reference(Resolvable[Any]):
 
     __local_file__: Path
     path: Path
-    anchor: str | None  # Optional anchor name to reference in the file
-    jmespath: str | None  # Optional JMESPath expression to extract a specific value from the file
+    anchor: Optional[str]  # Optional anchor name to reference in the file
+    jmespath: Optional[str]  # Optional JMESPath expression to extract a specific value from the file
 
-    def __init__(self, local_file: Path, path: str, anchor: str | None = None, jmespath: str | None = None):
+    def __init__(
+        self,
+        local_file: Path,
+        path: str,
+        anchor: Optional[str] = None,
+        jmespath: Optional[str] = None,
+    ):
         """
         Initialize the Reference object with a path.
 
@@ -129,10 +143,9 @@ class Reference(Resolvable[Any]):
         Returns:
             Reference: The created Reference object.
         """
-        # local_file = Path(constructor.loader.reader.stream.name)
-        if not hasattr(constructor, "stream_name"):
+        if constructor is None or not hasattr(constructor, "stream_name"):
             raise ConstructorException("Constructor does not have a 'stream_name' attribute.")
-        local_file = Path(getattr(constructor, "stream_name", None))
+        local_file = Path(constructor.stream_name)  # type: ignore
         if not isinstance(node, MappingNode):
             raise ConstructorException(f"Invalid node type: {type(node)}")
         dict_reference = BaseConstructor.construct_mapping(constructor, node)
@@ -154,7 +167,7 @@ class Reference(Resolvable[Any]):
             raise RepresenterException(f"Invalid node type: {type(node)}")
         return representer.represent_scalar("!reference", node.to_dict(), style="flow")
 
-    def resolve(self, loader: Any) -> Any:
+    def resolve(self, yaml: Any) -> Any:
         """
         Resolve the reference and return the resolved value.
 
@@ -169,9 +182,9 @@ class Reference(Resolvable[Any]):
 
         try:
             if self.anchor:
-                data = anchor.load_anchor_from_file(loader, self.path.open("r"), self.anchor)
+                data = anchor.load_anchor_from_file(yaml, self.path.open("r"), self.anchor)
             else:
-                data = loader.load(self.path.open("r"))
+                data = yaml.load(self.path.open("r"))
             if self.jmespath:
                 data = jmespath_search(data, self.jmespath)
         except ImportError as e:
@@ -196,11 +209,17 @@ class ReferenceAll(Resolvable[list[Any]]):
 
     __local_file__: Path
     glob: str
-    anchor: str | None  # Optional anchor name to reference in each of the files
-    jmespath: str | None  # Optional JMESPath expression to extract a specific value from each of the files
+    anchor: Optional[str]  # Optional anchor name to reference in each of the files
+    jmespath: Optional[str]  # Optional JMESPath expression to extract a specific value from each of the files
     paths: list[Path]  # List of paths matching the glob pattern
 
-    def __init__(self, local_file: Path, glob: str, anchor: str | None = None, jmespath: str | None = None):
+    def __init__(
+        self,
+        local_file: Path,
+        glob: str,
+        anchor: Optional[str] = None,
+        jmespath: Optional[str] = None,
+    ):
         """
         Initialize the ReferenceAll object with a glob pattern.
 
@@ -211,7 +230,7 @@ class ReferenceAll(Resolvable[list[Any]]):
             jmespath (str, optional): The JMESPath expression. Defaults to None.
         """
         self.__resolved__ = False
-        self.__resolved_value__ = None
+        self.__resolved_value__ = []
         self.__local_file__ = local_file
         self.glob = glob
         self.paths = list(local_file.parent.glob(glob))
@@ -253,10 +272,10 @@ class ReferenceAll(Resolvable[list[Any]]):
         Returns:
             ReferenceAll: The created ReferenceAll object.
         """
-        # local_file = Path(constructor.loader.reader.stream.name)
-        if not hasattr(constructor, "stream_name"):
-            raise ConstructorException("Constructor does not have a 'stream_name' attribute.")
-        local_file = Path(getattr(constructor, "stream_name", None))
+        if constructor is None or not hasattr(constructor, "stream_name"):
+            raise ConstructorException(f"Constructor {constructor} does not have a 'stream_name' attribute.")
+
+        local_file = Path(constructor.stream_name)  # type: ignore
         if not isinstance(node, MappingNode):
             raise ConstructorException(f"Invalid node type: {type(node)}")
         dict_reference = BaseConstructor.construct_mapping(constructor, node)
@@ -278,12 +297,12 @@ class ReferenceAll(Resolvable[list[Any]]):
             raise RepresenterException(f"Invalid node type: {type(node)}")
         return representer.represent_scalar("!reference-all", node.to_dict(), style="flow")
 
-    def resolve(self, loader: Any) -> Any:
+    def resolve(self, yaml: Any) -> Any:
         """
         Resolve the reference and return the resolved value.
 
         Args:
-            loader (YAML): The YAML loader.
+            yaml (YAML): The YAML loader.
 
         Returns:
             Any: The resolved value of the reference.
@@ -295,11 +314,11 @@ class ReferenceAll(Resolvable[list[Any]]):
         for path in self.paths:
             # we need to purge anchors from all loaded results.
             anchored_yaml_stream = path.open("r")
-            anchorless_yaml_stream = anchor.purge_anchors(loader, path.open("r"))
+            anchorless_yaml_stream = anchor.purge_anchors(yaml, path.open("r"))
             next_data = (
-                anchor.load_anchor_from_file(loader, anchored_yaml_stream, self.anchor)
+                anchor.load_anchor_from_file(yaml, anchored_yaml_stream, self.anchor)
                 if self.anchor
-                else loader.load(anchorless_yaml_stream)
+                else yaml.load(anchorless_yaml_stream)
             )
             if self.jmespath:
                 next_data = jmespath_search(next_data, self.jmespath)
