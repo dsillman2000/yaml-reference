@@ -35,22 +35,24 @@ classifiers = [
 [project.urls]
 Repository = "https://github.com/dsillman2000/yaml-reference.git"
 
-[tool.poetry]
-version = "0.0.0"
-
-[tool.poetry.requires-plugins]
-poetry-dynamic-versioning = { version = ">=1.0.0,<2.0.0", extras = ["plugin"] }
-
-[tool.poetry.scripts]
+[project.scripts]
 yref-compile = "yaml_reference.cli:compile_cli"
 
+[project.optional-dependencies]
+dev = ["pytest (>=8.3.5,<9.0.0)", "ruff (>=0.15.0,<1.0.0)"]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.5"
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
 
-[tool.poetry-dynamic-versioning]
-enable = true
+[tool.hatch.build.targets.wheel]
+packages = ["yaml_reference"]
 
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling", "uv-dynamic-versioning"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2,<9.0.0",
+    "ruff>=0.15.0,<1.0.0",
+]

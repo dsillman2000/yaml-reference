@@ -55,7 +55,11 @@ def load_anchor_from_file(yaml: YAML, stream: IO, anchor: str) -> Any:
                 break
     if not events:
         raise ValueError(f"Anchor '{anchor}' not found in {stream.name}")
-    events = [StreamStartEvent(), DocumentStartEvent()] + events + [DocumentEndEvent(), StreamEndEvent()]
+    events = (
+        [StreamStartEvent(), DocumentStartEvent()]
+        + events
+        + [DocumentEndEvent(), StreamEndEvent()]
+    )
 
     # Ensure we inherit the "stream name"
     strio = io.StringIO()
