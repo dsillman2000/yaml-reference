@@ -33,9 +33,33 @@ jobs:
             - name: Output version
               run: 'echo "GitVersion returned: ${{ steps.gitversion.outputs.semVer }}"'
 
+    pytests:
+        runs-on: ubuntu-latest
+        strategy:
+            matrix:
+                python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v5
+              with:
+                  python-version: ${{ matrix.python-version }}
+
+            - name: Install uv
+              run: pip install uv
+
+            - name: Install dependencies
+              run: uv sync
+
+            - name: Run tests with verbose output
+              run: uv run pytest tests/ -sv
+
     build:
         runs-on: ubuntu-latest
-        needs: get-version
+        needs: [get-version, pytests]
         outputs:
             dist-path: dist
         steps:
