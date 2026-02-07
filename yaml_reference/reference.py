@@ -245,6 +245,7 @@ class ReferenceAll(Resolvable[list[Any]]):
         self.__local_file__ = local_file
         self.glob = glob
         self.paths = list(local_file.parent.glob(glob))
+        self.paths = sorted(self.paths, key=lambda p: str(p.absolute()))
         self.anchor = anchor
         self.jmespath = jmespath
 
