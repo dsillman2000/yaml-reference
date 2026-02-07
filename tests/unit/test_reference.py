@@ -20,11 +20,15 @@ def test_reference_load(stage_files):
     assert data["contents"]["inner"] == "inner_value"
     assert data["contents"]["another_inner"]["inner2"] == "inner2_value"
 
-    files["deeper/inner2.yml"] += "\nanother_inner2: !reference { path: yet/inner3.yml }"
+    files["deeper/inner2.yml"] += (
+        "\nanother_inner2: !reference { path: yet/inner3.yml }"
+    )
     files["deeper/yet/inner3.yml"] = "inner3: inner3_value"
     stg = stage_files(files)
     data = yaml.load(stg / "test.yml")
-    assert data["contents"]["another_inner"]["another_inner2"]["inner3"] == "inner3_value"
+    assert (
+        data["contents"]["another_inner"]["another_inner2"]["inner3"] == "inner3_value"
+    )
 
     files["leaf.yml"] = "leaf_value\n..."
     files["deeper/yet/inner3.yml"] += "\nleaf: !reference { path: ../../leaf.yml }"
@@ -88,7 +92,9 @@ def test_reference_anchor_load(stage_files):
     assert data["contents"] == {"inner2": "inner2_value"}
 
     files["deeper/inner2.yml"] = "data: !reference { path: inner3.yml, anchor: yo }\n"
-    files["deeper/inner3.yml"] = "inner3: inner3_value\nmore: &yo\n  type: xyz\n  information: [1, 2, 3]\n"
+    files["deeper/inner3.yml"] = (
+        "inner3: inner3_value\nmore: &yo\n  type: xyz\n  information: [1, 2, 3]\n"
+    )
     stg = stage_files(files)
     data = yaml.load(stg / "test.yml")
     assert data["contents"] == {"data": {"type": "xyz", "information": [1, 2, 3]}}
@@ -110,8 +116,13 @@ def test_reference_all_anchor_load(stage_files):
     assert data
     assert data["hello"] == "world"
     assert len(data["contents"]) == 3
-    assert "Lorem ipsum dolor sit amet,\nconsectetur adipiscing elit." in data["contents"]
-    assert "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua." in data["contents"]
+    assert (
+        "Lorem ipsum dolor sit amet,\nconsectetur adipiscing elit." in data["contents"]
+    )
+    assert (
+        "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        in data["contents"]
+    )
     assert (
         "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris\nnisi ut aliquip ex ea commodo consequat."
         in data["contents"]
@@ -135,12 +146,16 @@ def test_reference_jmespath_load(stage_files):
     files["items/item-1.yml"] = "name: item1\nvalue: value1\n"
     files["items/item-2.yml"] = "name: item2\nvalue: value2\n"
     files["items/item-3.yml"] = "name: item3\nvalue: value3\n"
-    files["test.yml"] = "item: !reference\n  path: data.yml\n  jmespath: items[?name=='item1'] | [0]"
+    files["test.yml"] = (
+        "item: !reference\n  path: data.yml\n  jmespath: items[?name=='item1'] | [0]"
+    )
     stg = stage_files(files)
     data = yaml.load(stg / "test.yml")
     assert data["item"] == {"name": "item1", "value": "value1"}
 
-    files["test.yml"] = "item: !reference\n  path: data.yml\n  jmespath: max_by(items, &value)"
+    files["test.yml"] = (
+        "item: !reference\n  path: data.yml\n  jmespath: max_by(items, &value)"
+    )
     stg = stage_files(files)
     data = yaml.load(stg / "test.yml")
     assert data["item"] == {"name": "item3", "value": "value3"}

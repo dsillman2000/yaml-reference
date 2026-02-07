@@ -21,7 +21,11 @@ def test_compile_cli_basic(stage_files):
     assert output_file.exists()
     content_out = output_file.read_text()
     assert content_out == (
-        "another_inner:\n" "  inner2: inner2_value\n" "inner_again:\n" "- inner3: inner3_value\n" "- leaf_value\n"
+        "another_inner:\n"
+        "  inner2: inner2_value\n"
+        "inner_again:\n"
+        "- inner3: inner3_value\n"
+        "- leaf_value\n"
     )
 
 

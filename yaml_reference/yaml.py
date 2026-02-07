@@ -36,8 +36,12 @@ class YAML(_YAML):
         # I'm not sure which of these I should use, so I'll attach the state to both.
         setattr(self.constructor, "stream_name", None)
         setattr(self.Constructor, "stream_name", None)
-        self.load = _attach_stream_name_to_constructor(self, recursively_resolve_after(self, self.load))
-        self.load_all = _attach_stream_name_to_constructor(self, recursively_resolve_after(self, self.load_all))
+        self.load = _attach_stream_name_to_constructor(
+            self, recursively_resolve_after(self, self.load)
+        )
+        self.load_all = _attach_stream_name_to_constructor(
+            self, recursively_resolve_after(self, self.load_all)
+        )
         # self.representer.add_representer(Reference, Reference.to_yaml)
         # self.representer.add_representer(ReferenceAll, ReferenceAll.to_yaml)
         # self.dump = recursively_unresolve_before(self.dump)
