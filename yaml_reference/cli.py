@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from yaml_reference import YAML
+from yaml_reference import YAMLReference
 
 
 def compile_main(
@@ -16,7 +16,8 @@ def compile_main(
         input_file (str): The path to the input YAML file. If not provided, the function will read from standard input.
         output_file (str): The path to the output YAML file. If not provided, the function will write to standard output.
     """
-    yaml = YAML()
+    yaml = YAMLReference(typ="rt")
+    yaml.representer.ignore_aliases = lambda *_: True
 
     if input_file is None:
         input_handle = sys.stdin

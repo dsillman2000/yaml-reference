@@ -24,7 +24,7 @@ def _attach_stream_name_to_constructor(yaml, func: Callable) -> Callable:
     return wrapper
 
 
-class YAML(_YAML):
+class YAMLReference(_YAML):
     """
     A class to represent a YAML object with custom loading and dumping behavior.
     """
@@ -42,10 +42,6 @@ class YAML(_YAML):
         self.load_all = _attach_stream_name_to_constructor(
             self, recursively_resolve_after(self, self.load_all)
         )
-        # self.representer.add_representer(Reference, Reference.to_yaml)
-        # self.representer.add_representer(ReferenceAll, ReferenceAll.to_yaml)
-        # self.dump = recursively_unresolve_before(self.dump)
-        # self.dump_all = recursively_unresolve_before(self.dump_all)
 
 
-__all__ = ["YAML"]
+__all__ = ["YAMLReference"]

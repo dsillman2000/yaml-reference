@@ -3,33 +3,16 @@ from typing import (
     Any,
     Callable,
     Generic,
-    Optional,
     Protocol,
     TypeVar,
     runtime_checkable,
 )
 
-from ruamel.yaml import BaseConstructor, Constructor, MappingNode, Node, Representer
+from ruamel.yaml import Constructor, MappingNode, Node
+from ruamel.yaml.comments import CommentedMap
+from ruamel.yaml.constructor import RoundTripConstructor
 
-from yaml_reference import anchor
-from yaml_reference.errors import ConstructorException, RepresenterException
-
-
-def jmespath_search(data: Any, jmespath_expr: str) -> Any:
-    """
-    Perform a JMESPath search on the given data.
-
-    Args:
-        data (Any): The data to search.
-        jmespath_expr (str): The JMESPath expression to use for searching.
-
-    Returns:
-        Any: The result of the JMESPath search.
-    """
-    import jmespath
-
-    return jmespath.search(jmespath_expr, data)
-
+from yaml_reference.errors import ConstructorException
 
 T = TypeVar("T")
 
@@ -80,17 +63,11 @@ class Reference(Resolvable[Any]):
 
     __local_file__: Path
     path: Path
-    anchor: Optional[str]  # Optional anchor name to reference in the file
-    jmespath: Optional[
-        str
-    ]  # Optional JMESPath expression to extract a specific value from the file
 
     def __init__(
         self,
         local_file: Path,
         path: str,
-        anchor: Optional[str] = None,
-        jmespath: Optional[str] = None,
     ):
         """
         Initialize the Reference object with a path.
@@ -98,15 +75,11 @@ class Reference(Resolvable[Any]):
         Args:
             local_file (Path): The path to the local file containing the reference.
             path (str): The path argument of the reference.
-            anchor (str, optional): The anchor name. Defaults to None.
-            jmespath (str, optional): The JMESPath expression. Defaults to None.
         """
         self.__resolved__ = False
         self.__resolved_value__ = None
         self.__local_file__ = local_file
         self.path = local_file.parent / path
-        self.anchor = anchor
-        self.jmespath = jmespath
 
     def __repr__(self) -> str:
         """
@@ -115,9 +88,7 @@ class Reference(Resolvable[Any]):
         Returns:
             str: The string representation of the Reference object.
         """
-        anchor_suffix = f"#{self.anchor}" if self.anchor else ""
-        jmespath_suffix = f", jmespath={self.jmespath}" if self.jmespath else ""
-        return f"Reference(path={self.path.relative_to(self.__local_file__.parent)}{anchor_suffix}{jmespath_suffix})"
+        return f'Reference("path={self.path.relative_to(self.__local_file__.parent)}")'
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -127,10 +98,6 @@ class Reference(Resolvable[Any]):
             dict[str, Any]: The dictionary representation of the Reference object.
         """
         path_dict = {"path": str(self.path.relative_to(self.__local_file__.parent))}
-        if self.anchor:
-            path_dict["anchor"] = self.anchor
-        if self.jmespath:
-            path_dict["jmespath"] = self.jmespath
         return path_dict
 
     @classmethod
@@ -152,24 +119,12 @@ class Reference(Resolvable[Any]):
         local_file = Path(constructor.stream_name)  # type: ignore
         if not isinstance(node, MappingNode):
             raise ConstructorException(f"Invalid node type: {type(node)}")
-        dict_reference = BaseConstructor.construct_mapping(constructor, node)
-        return cls(local_file, **dict_reference)
-
-    @classmethod
-    def to_yaml(cls, representer: Representer, node: "Reference") -> Node:
-        """
-        Convert a Reference object to a YAML node.
-
-        Args:
-            representer (Representer): The YAML representer.
-            node (Reference): The Reference object.
-
-        Returns:
-            Node: The YAML node representing the Reference object.
-        """
-        if not isinstance(node, Reference):
-            raise RepresenterException(f"Invalid node type: {type(node)}")
-        return representer.represent_scalar("!reference", node.to_dict(), style="flow")
+        if isinstance(constructor, RoundTripConstructor):
+            data = CommentedMap()
+            constructor.construct_mapping(node, maptyp=data)
+        else:
+            data = constructor.construct_mapping(node)
+        return cls(local_file, **data)
 
     def resolve(self, yaml: Any) -> Any:
         """
@@ -185,24 +140,11 @@ class Reference(Resolvable[Any]):
             return self.__resolved_value__
 
         try:
-            if self.anchor:
-                data = anchor.load_anchor_from_file(
-                    yaml, self.path.open("r"), self.anchor
-                )
-            else:
-                data = yaml.load(self.path.open("r"))
-            if self.jmespath:
-                data = jmespath_search(data, self.jmespath)
-        except ImportError as e:
-            raise ConstructorException(
-                "JMESPath expression is not supported because the 'jmespath' package is not installed.\n"
-                + str(e)
-            ) from e
+            data = yaml.load(self.path.open("r"))
         except Exception as e:
             raise ConstructorException(
                 f"Failed to resolve reference: {self.path.absolute()}\nException:\n{e}"
             ) from e
-        # setattr(data, "__resolvable__", self)
         self.__resolved_value__ = data
         self.__resolved__ = True
         return self.__resolved_value__
@@ -218,27 +160,15 @@ class ReferenceAll(Resolvable[list[Any]]):
 
     __local_file__: Path
     glob: str
-    anchor: Optional[str]  # Optional anchor name to reference in each of the files
-    jmespath: Optional[
-        str
-    ]  # Optional JMESPath expression to extract a specific value from each of the files
     paths: list[Path]  # List of paths matching the glob pattern
 
-    def __init__(
-        self,
-        local_file: Path,
-        glob: str,
-        anchor: Optional[str] = None,
-        jmespath: Optional[str] = None,
-    ):
+    def __init__(self, local_file: Path, glob: str):
         """
         Initialize the ReferenceAll object with a glob pattern.
 
         Args:
             local_file (Path): The path to the local file containing the reference.
             glob (str): The glob pattern to match files.
-            anchor (str, optional): The anchor name. Defaults to None.
-            jmespath (str, optional): The JMESPath expression. Defaults to None.
         """
         self.__resolved__ = False
         self.__resolved_value__ = []
@@ -246,8 +176,6 @@ class ReferenceAll(Resolvable[list[Any]]):
         self.glob = glob
         self.paths = list(local_file.parent.glob(glob))
         self.paths = sorted(self.paths, key=lambda p: str(p.absolute()))
-        self.anchor = anchor
-        self.jmespath = jmespath
 
     def __repr__(self) -> str:
         """
@@ -256,9 +184,7 @@ class ReferenceAll(Resolvable[list[Any]]):
         Returns:
             str: The string representation of the ReferenceAll object.
         """
-        anchor_suffix = f"#{self.anchor}" if self.anchor else ""
-        jmespath_suffix = f", jmespath={self.jmespath}" if self.jmespath else ""
-        return f"ReferenceAll(glob={self.glob}{anchor_suffix}{jmespath_suffix})"
+        return f'ReferenceAll(glob="{self.glob}")'
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -267,10 +193,7 @@ class ReferenceAll(Resolvable[list[Any]]):
         Returns:
             dict[str, Any]: The dictionary representation of the ReferenceAll object.
         """
-        glob_dict = {"glob": str(self.glob)}
-        if self.anchor:
-            glob_dict["anchor"] = self.anchor
-        return glob_dict
+        return {"glob": str(self.glob)}
 
     @classmethod
     def from_yaml(cls, constructor: Constructor, node: Node) -> "ReferenceAll":
@@ -292,26 +215,12 @@ class ReferenceAll(Resolvable[list[Any]]):
         local_file = Path(constructor.stream_name)  # type: ignore
         if not isinstance(node, MappingNode):
             raise ConstructorException(f"Invalid node type: {type(node)}")
-        dict_reference = BaseConstructor.construct_mapping(constructor, node)
-        return cls(local_file, **dict_reference)
-
-    @classmethod
-    def to_yaml(cls, representer: Representer, node: "ReferenceAll") -> Node:
-        """
-        Convert a ReferenceAll object to a YAML node.
-
-        Args:
-            representer (Representer): The YAML representer.
-            node (ReferenceAll): The ReferenceAll object.
-
-        Returns:
-            Node: The YAML node representing the ReferenceAll object.
-        """
-        if not isinstance(node, ReferenceAll):
-            raise RepresenterException(f"Invalid node type: {type(node)}")
-        return representer.represent_scalar(
-            "!reference-all", node.to_dict(), style="flow"
-        )
+        if isinstance(constructor, RoundTripConstructor):
+            data = CommentedMap()
+            constructor.construct_mapping(node, maptyp=data)
+        else:
+            data = constructor.construct_mapping(node)
+        return cls(local_file, **data)
 
     def resolve(self, yaml: Any) -> Any:
         """
@@ -326,22 +235,9 @@ class ReferenceAll(Resolvable[list[Any]]):
         if self.resolved:
             return self.__resolved_value__
 
-        data = []
-        for path in self.paths:
-            # we need to purge anchors from all loaded results.
-            anchored_yaml_stream = path.open("r")
-            anchorless_yaml_stream = anchor.purge_anchors(yaml, path.open("r"))
-            next_data = (
-                anchor.load_anchor_from_file(yaml, anchored_yaml_stream, self.anchor)
-                if self.anchor
-                else yaml.load(anchorless_yaml_stream)
-            )
-            if self.jmespath:
-                next_data = jmespath_search(next_data, self.jmespath)
-            data.append(next_data)
+        data = [yaml.load(path.open("r")) for path in self.paths]
         if not data:
             raise ConstructorException(f"Failed to resolve reference: {self.glob}")
-        # setattr(data, "__resolvable__", self)
         self.__resolved_value__ = data
         self.__resolved__ = True
         return self.__resolved_value__
@@ -406,68 +302,4 @@ def recursively_resolve_after(yaml, func: Callable) -> Callable:
         result = func(*args, **kwargs)
         return recursively_resolve(yaml, result)
 
-    return wrapper
-
-
-##
-## Eventually, I'll figure out how to round-trip references and I'll use some sort of "unresolve" API.
-##
-
-
-def unresolve(data: Any) -> Any:
-    """
-    Unresolve a resolved value.
-
-    Args:
-        data (Any): The resolved value to unresolve.
-
-    Returns:
-        Any: The unresolved data.
-    """
-    if hasattr(data, "__resolvable__"):
-        return data.__resolvable__
-    return data
-
-
-def recursively_unresolve(data: Any) -> Any:
-    """
-    Recursively unresolve all references in the given data.
-
-    Args:
-        data (Any): The data to unresolve references in.
-
-    Returns:
-        Any: The data with all references unresolved.
-    """
-    try:
-        if isinstance(data, list):
-            return [recursively_unresolve(item) for item in data]
-        elif isinstance(data, dict):
-            return {key: recursively_unresolve(value) for key, value in data.items()}
-        elif isinstance(data, Resolvable):
-            return unresolve(data)
-        else:
-            return data
-    except RepresenterException as e:
-        raise RepresenterException(f"Error unresolving reference: {e}") from e
-    except Exception as e:
-        raise RepresenterException(f"Unexpected error: {e}") from e
-
-
-def recursively_unresolve_before(func: Callable) -> Callable:
-    """Decorator to unresolve data before a function call.
-
-    Args:
-        func (Callable): Function to be decorated.
-
-    Returns:
-        Callable: Decorated function.
-    """
-
-    def wrapper(*args, **kwargs):
-        result = recursively_unresolve(args[0])
-        args = (result,) + args[1:]
-        return func(*args, **kwargs)
-
-    return wrapper
     return wrapper
