@@ -13,6 +13,10 @@ poetry add yaml-reference
 uv add yaml-reference
 ```
 
+## Spec
+
+This Python library implements the YAML specification for cross-file references in YAML files using tags `!reference` and `!reference-all` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
+
 ## Example
 
 ```yaml
@@ -56,7 +60,7 @@ To get red of red squigglies in VSCode when using the `!reference` and `!referen
 
 ## CLI interface
 
-There is a CLI interface for this package which can be used to convert a YAML file which contains `!reference` tags into a single YAML file with all the references expanded. This is useful for generating a single file for deployment or other purposes.
+There is a CLI interface for this package which can be used to convert a YAML file which contains `!reference` tags into a single YAML file with all the references expanded. This is useful for generating a single file for deployment or other purposes. Note that the keys of mappings will be sorted alphabetically. This CLI interface is used to test the contract of this package against the `yaml-reference-specs` project.
 
 ```bash
 $ yref-compile -h
@@ -71,15 +75,15 @@ $ yref-compile -h
     -o OUTPUT, --output OUTPUT
                           Path to the output YAML file. If not provided, writes to stdout.
 $ yref-compile -i root.yaml
-  version: '3.1'
-  services:
-  - website
-  - database
   networkConfigs:
   - network: vpn
     version: 1.1
   - network: nfs
     version: 1.0
+  services:
+  - website
+  - database
+  version: '3.1'
 ```
 
 ## Acknowledgements
