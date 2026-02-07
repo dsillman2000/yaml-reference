@@ -9,7 +9,13 @@ Install the package from PyPI with:
 pip install yaml-reference
 # poetry
 poetry add yaml-reference
+# uv
+uv add yaml-reference
 ```
+
+## Spec
+
+This Python library implements the YAML specification for cross-file references in YAML files using tags `!reference` and `!reference-all` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
 ## Example
 
@@ -32,14 +38,14 @@ networkConfigs:
 Supposing there are `services/website.yaml` and `services/database.yaml` files in the same directory as `root.yaml`, and a `networks` directory with YAML files, the above will be expanded to account for the referenced files with the following Python code:
 
 ```python
-from yaml_reference import YAML
+from yaml_reference import YAMLReference
 
-yaml = YAML()
+yaml = YAMLReference()
 with open("root.yaml", "r") as f:
     data = yaml.load(f)
 ```
 
-Note that the `YAML` class is a direct subclass of the base `ruamel.yaml.YAML` loader class, so the same API applies for customizing how it loads YAML files or other tags (e.g. `yaml = YAML(typ='safe')`).
+Note that the `YAMLReference` class is a direct subclass of the base `ruamel.yaml.YAML` loader class, so the same API applies for customizing how it loads YAML files or other tags (e.g. `yaml = YAMLReference(typ='safe')`).
 
 ### VSCode squigglies
 
@@ -54,7 +60,7 @@ To get red of red squigglies in VSCode when using the `!reference` and `!referen
 
 ## CLI interface
 
-There is a CLI interface for this package which can be used to convert a YAML file which contains `!reference` tags into a single YAML file with all the references expanded. This is useful for generating a single file for deployment or other purposes.
+There is a CLI interface for this package which can be used to convert a YAML file which contains `!reference` tags into a single YAML file with all the references expanded. This is useful for generating a single file for deployment or other purposes. Note that the keys of mappings will be sorted alphabetically. This CLI interface is used to test the contract of this package against the `yaml-reference-specs` project.
 
 ```bash
 $ yref-compile -h
@@ -69,87 +75,16 @@ $ yref-compile -h
     -o OUTPUT, --output OUTPUT
                           Path to the output YAML file. If not provided, writes to stdout.
 $ yref-compile -i root.yaml
-  version: '3.1'
-  services:
-  - website
-  - database
   networkConfigs:
   - network: vpn
     version: 1.1
   - network: nfs
     version: 1.0
+  services:
+  - website
+  - database
+  version: '3.1'
 ```
-
-## Anchor references
-
-You can supply the `!reference` / `!reference-all` tags with an anchor name to use for the reference.
-
-```yaml
-# root.yaml
-ports:
-  !reference-all
-  glob: "networks/*.yaml"
-  anchor: "port"
-```
-
-```yaml
-# networks/vpn.yaml
-name: vpn
-port: &port 8001
-```
-
-```yaml
-# networks/nfs.yaml
-name: nfs
-port: &port 2000
-```
-
-Loading the `root.yaml` file with the Python interface or converting it with the CLI will result in the following YAML (in no particular order):
-
-```yaml
-ports:
-  - 8001
-  - 2000
-```
-
-## JMESPath functionality
-
-You can also use JMESPath expressions to filter the results of references:
-
-```yaml
-# furthest.yml
-furthest-town-name:
-  !reference
-  path: "towns/all.yml"
-  jmespath: "max_by(towns, &distance).name"
-```
-
-```yaml
-#towns/all.yml
-towns:
-  !reference-all
-  glob: "towns/*.yml"
-```
-
-```yaml
-# towns/los_altos.yml
-name: Los Altos
-distance: 10
-# towns/sunnyvale.yml
-name: Sunnyvale
-distance: 5
-# towns/mountain_view.yml
-name: Mountain View
-distance: 15
-```
-
-Using the CLI or Python interface for loading the root `furthes.yml` file will yield the following result:
-
-```yaml
-furthest-town-name: Mountain View
-```
-
-See more information about JMESPath expressions in the [JMESPath documentation](https://jmespath.org/).
 
 ## Acknowledgements
 
