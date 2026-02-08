@@ -60,7 +60,7 @@ To get red of red squigglies in VSCode when using the `!reference` and `!referen
 
 ## CLI interface
 
-There is a CLI interface for this package which can be used to convert a YAML file which contains `!reference` tags into a single YAML file with all the references expanded. This is useful for generating a single file for deployment or other purposes. Note that the keys of mappings will be sorted alphabetically. This CLI interface is used to test the contract of this package against the `yaml-reference-specs` project.
+There is a CLI interface for this package which can be used to read a YAML file which contains `!reference` tags and dump its contents as pretty-printed JSON with references expanded. This is useful for generating a single file for deployment or other purposes. Note that the keys of mappings will be sorted alphabetically. This CLI interface is used to test the contract of this package against the `yaml-reference-specs` project.
 
 ```bash
 $ yaml-reference-cli -h
@@ -91,6 +91,23 @@ $ yaml-reference-cli root.yaml
     ],
     "version": "3.1"
   }
+```
+
+It's still possible to yield the results as a YAML file using the `yq` CLI tool ([mikefarah/yq](https://github.com/mikefarah/yq)).
+
+```bash
+$ yaml-reference-cli root.yaml | yq -P
+networkConfigs:
+  - network: vpn
+    version: 1.1
+  - network: nfs
+    version: 1.0
+services:
+  - website
+  - database
+version: 3.1
+# Pipe it to a result file
+$ yaml-reference-cli root.yaml | yq -P > .compiled/root.yaml
 ```
 
 ## Acknowledgements
