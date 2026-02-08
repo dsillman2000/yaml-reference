@@ -64,26 +64,30 @@ There is a CLI interface for this package which can be used to convert a YAML fi
 
 ```bash
 $ yref-compile -h
-  usage: yref-compile [-h] [-i INPUT] [-o OUTPUT]
+  usage: yref-compile [-h]
 
-  Compile a YAML file containing !reference tags into a new YAML file with resolved references.
+  Compile a YAML file containing !reference tags into a new YAML file with resolved references. Expects a YAML file to be provided in stdin. Outputs JSON content to stdout.
 
   options:
-    -h, --help            show this help message and exit
-    -i INPUT, --input INPUT
-                          Path to the input YAML file. If not provided, reads from stdin.
-    -o OUTPUT, --output OUTPUT
-                          Path to the output YAML file. If not provided, writes to stdout.
-$ yref-compile -i root.yaml
-  networkConfigs:
-  - network: vpn
-    version: 1.1
-  - network: nfs
-    version: 1.0
-  services:
-  - website
-  - database
-  version: '3.1'
+    -h, --help  show this help message and exit
+$ cat root.yaml | yref-compile
+  {
+    "networkConfigs": [
+      {
+        "network": "vpn",
+        "version": "1.1"
+      },
+      {
+        "network": "nfs",
+        "version": "1.0"
+      }
+    ],
+    "services": [
+      "website",
+      "database"
+    ],
+    "version": "3.1"
+  }
 ```
 
 ## Acknowledgements
