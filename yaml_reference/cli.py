@@ -37,7 +37,7 @@ def compile_cli():
     parser = argparse.ArgumentParser(
         description=(
             "Compile a YAML file containing !reference tags into a new YAML file with resolved references. "
-            "Expects a YAML file to be provided in stdin. Outputs JSON content to stdout."
+            'Expects a YAML file to be provided via the "input_file" argument. Outputs JSON content to stdout.'
         )
     )
     parser.add_argument(

@@ -35,7 +35,7 @@ classifiers = [
 Repository = "https://github.com/dsillman2000/yaml-reference.git"
 
 [project.scripts]
-yref-compile = "yaml_reference.cli:compile_cli"
+yaml-reference-cli = "yaml_reference.cli:compile_cli"
 
 [project.optional-dependencies]
 dev = ["pytest (>=8.3.5,<9.0.0)", "ruff (>=0.15.0,<1.0.0)"]
