@@ -2,7 +2,7 @@ import json
 import sys
 from pathlib import Path
 
-from yaml_reference import YAMLReference
+from yaml_reference import load_yaml_with_references
 
 
 def compile_main(input_file: str):
@@ -24,9 +24,7 @@ def compile_main(input_file: str):
         print(f'Error: Input file "{input_path}" does not exist.', file=sys.stderr)
         sys.exit(1)
 
-    yaml = YAMLReference(typ="safe")
-
-    data = yaml.load(input_path.open("r"))
+    data = load_yaml_with_references(input_path)
 
     json.dump(data, sys.stdout, sort_keys=True, indent=2)
 

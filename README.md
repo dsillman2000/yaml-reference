@@ -38,14 +38,24 @@ networkConfigs:
 Supposing there are `services/website.yaml` and `services/database.yaml` files in the same directory as `root.yaml`, and a `networks` directory with YAML files, the above will be expanded to account for the referenced files with the following Python code:
 
 ```python
-from yaml_reference import YAMLReference
+from yaml_reference import load_yaml_with_references
 
-yaml = YAMLReference()
-with open("root.yaml", "r") as f:
-    data = yaml.load(f)
+data = load_yaml_with_references("root.yaml")
+print(data)
+# {"networkConfigs": [{"network": "vpn","version": "1.1"},{"network": "nfs","version": "1.0"}],"services": ["website","database"],"version": "3.1"}
 ```
 
-Note that the `YAMLReference` class is a direct subclass of the base `ruamel.yaml.YAML` loader class, so the same API applies for customizing how it loads YAML files or other tags (e.g. `yaml = YAMLReference(typ='safe')`).
+Note that the `load_yaml_with_references` function instantiates a `ruamel.yaml.YAML` loader class (`typ='safe'`) to perform the deserialization of the YAML files, and returns a Python dictionary with the recursively-expanded YAML data.
+
+If you wish to resolve one "layer" of references without recursively exhausting the entire reference graph, the `parse_yaml_with_references` function can be used to obtain the original YAML document's contents with `!reference`/`!reference-all` tags as dedicated objects called `Reference` and `ReferenceAll`.
+
+```python
+from yaml_reference import parse_yaml_with_references
+
+data = parse_yaml_with_references("root.yaml")
+print(data["networkConfigs"])
+# ReferenceAll(glob="networks/*.yaml", location="/path/to/root.yaml")
+```
 
 ### VSCode squigglies
 
@@ -109,6 +119,10 @@ version: 3.1
 # Pipe it to a result file
 $ yaml-reference-cli root.yaml | yq -P > .compiled/root.yaml
 ```
+
+## Safety note
+
+As of now, the specification does not require any explicit protection against circular references. This package does not check for circular references and will result in an infinite loop (max recursion depth exceeded) if a circular reference is encountered. Onus is on the users of this package to ensure that circular references are not present in their referential YAML files.
 
 ## Acknowledgements
 
