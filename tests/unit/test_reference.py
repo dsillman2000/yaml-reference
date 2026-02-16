@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from yaml_reference import (
     Reference,
     ReferenceAll,
@@ -98,3 +100,63 @@ def test_parse_references(stage_files):
     assert isinstance(data["open"], ReferenceAll)
     assert data["open"].glob == "../chapters/*/summary.yml"
     assert data["open"].location == str((stg / "next/open.yml").absolute())
+
+
+def test_disallow_absolute_path_references(stage_files):
+    """Test that absolute path references are disallowed."""
+    actual_file = Path("/tmp/file.yml")
+    if actual_file.exists():
+        actual_file.unlink()
+    actual_file.write_text("data: hello world")
+
+    files = {"input.yml": "data: !reference { path: '/tmp/file.yml' }"}
+    stg = stage_files(files)
+
+    with pytest.raises(ValueError):
+        # When omitting allowed paths, the reference should fail due to absolute path.
+        load_yaml_with_references(stg / "input.yml")
+
+    with pytest.raises(ValueError):
+        # Even if we explicitly allow the /tmp folder, we don't allow absolute paths in references.
+        load_yaml_with_references(stg / "input.yml", allow_paths=["/tmp"])
+
+
+def test_allow_paths_load_yaml_with_references(stage_files):
+    """Test that allow_paths restricts which paths can be referenced."""
+    files = {
+        "inner/test.yml": "hello: world\ncontents: !reference { path: ./inner.yml }",
+        "inner/another_test.yml": "hello: world\nout: !reference { path: ../outside/outside.yml }",
+        "inner/with_all.yml": "all: !reference-all {glob: '../outside/*.yml'}",
+        "inner/inner.yml": "inner: inner_value",
+        "outside/outside.yml": "outside: outside_value",
+        "some/other.yml": "other: other_value",
+    }
+    stg = stage_files(files)
+
+    # Test with default allow_paths (should work since inner.yml is in same directory)
+    data = load_yaml_with_references(stg / "inner/test.yml")
+    assert data["hello"] == "world"
+    assert data["contents"]["inner"] == "inner_value"
+
+    # Test with explicit allow_paths that includes the "outside" dir (!reference)
+    data = load_yaml_with_references(
+        stg / "inner/another_test.yml", allow_paths=[stg / "outside"]
+    )
+    assert data["hello"] == "world"
+    assert data["out"]["outside"] == "outside_value"
+
+    # Test with allow_paths that doesn't include the referenced file (should fail, !reference)
+    with pytest.raises(PermissionError):
+        load_yaml_with_references(stg / "inner/another_test.yml")
+
+    # Test with explicit allow_paths that includes the "outside" dir (!reference-all)
+    data = load_yaml_with_references(
+        stg / "inner/with_all.yml", allow_paths=[stg / "outside"]
+    )
+    assert data["all"][0]["outside"] == "outside_value"
+
+    # Test with allow_paths that doesn't include the referenced file (should fail, !reference-all)
+    with pytest.raises(PermissionError):
+        load_yaml_with_references(
+            stg / "inner/with_all.yml", allow_paths=[stg / "some"]
+        )
