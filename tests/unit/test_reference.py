@@ -160,3 +160,50 @@ def test_allow_paths_load_yaml_with_references(stage_files):
         load_yaml_with_references(
             stg / "inner/with_all.yml", allow_paths=[stg / "some"]
         )
+
+
+@pytest.mark.parametrize(
+    "test_name, files, entry_point",
+    [
+        (
+            "self_reference",
+            {
+                "self_ref.yml": "data: !reference { path: ./self_ref.yml }",
+            },
+            "self_ref.yml",
+        ),
+        (
+            "triangle_reference",
+            {
+                "file1.yml": "name: File 1\nref: !reference { path: ./file2.yml }",
+                "file2.yml": "name: File 2\nref: !reference { path: ./file3.yml }",
+                "file3.yml": "name: File 3\nref: !reference { path: ./file1.yml }",
+            },
+            "file1.yml",
+        ),
+        (
+            "reference_all_circular",
+            {
+                "main.yml": "data: !reference-all { glob: ./refs/*.yml }",
+                "refs/file1.yml": "name: File 1\nref: !reference { path: ../main.yml }",
+                "refs/file2.yml": "name: File 2",
+            },
+            "main.yml",
+        ),
+        (
+            "reference_all_self",
+            {
+                "main.yml": "data: !reference-all { glob: '*.yml' }",
+                "doc-a.yml": "name: Doc A",
+                "doc-b.yml": "name: Doc B",
+            },
+            "main.yml",
+        ),
+    ],
+)
+def test_circular_reference_detection(stage_files, test_name, files, entry_point):
+    """Test that circular references are detected and disallowed."""
+    stg = stage_files(files)
+
+    with pytest.raises(ValueError, match="Circular reference detected"):
+        load_yaml_with_references(stg / entry_point)
