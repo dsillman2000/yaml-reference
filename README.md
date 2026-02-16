@@ -135,9 +135,9 @@ As required by the yaml-reference-specs specification, this package includes cir
 
 ## Security considerations
 
-### Path restriction with `allow_paths`
+### Path restriction and `allow_paths`
 
-By default, `!reference` and `!reference-all` tags can only reference files within the same directory as the source YAML file. To allow references to files in other directories, you must explicitly specify allowed paths using the `allow_paths` parameter:
+By default, `!reference` and `!reference-all` tags can only reference files within the same directory as the source YAML file (or child subdirectories). To allow references to files in other disparate directory trees, you must explicitly specify allowed paths using the `allow_paths` parameter:
 
 ```python
 from yaml_reference import load_yaml_with_references
@@ -155,15 +155,11 @@ In the CLI, use the `--allow` flag:
 yaml-reference compile input.yml --allow /allowed/path1 --allow /allowed/path2
 ```
 
+Whether or not `allow_paths` is specified, the default behavior is to allow references to files in the same directory as the source YAML file (or subdirectories). "Back-navigating" out of a the root directory is not allowed (".." local references in a root YAML file). This provides a secure baseline to prevent unsafe access which is not explicitly allowed.
+
 ### Absolute path restrictions
 
-References using absolute paths (e.g., `/tmp/file.yml`) are explicitly rejected with a `ValueError`. All reference paths must be relative to the source file's directory.
-
-### Permission errors
-
-If a reference attempts to access a file outside the allowed paths, a `PermissionError` is raised. This prevents unauthorized file access through YAML references.
-
-Whether or not `allow_paths` is specified, the default behavior is to allow references to files in the same directory as the source YAML file (or subdirectories). "Back-navigating" out of a the root directory is not allowed (".." local references in a root YAML file). This provides a secure baseline to prevent unsafe access which is not explicitly allowed.
+References using absolute paths (e.g., `/tmp/file.yml`) are explicitly rejected with a `ValueError`. All reference paths must be relative to the source file's directory. If you absolutely must reference an absolute path, relative paths to symlinks can be used. Note that their target directories must be explicitly allowed to avoid permission errors (see the above section about "Path restriction and `allow_paths`").
 
 ## Acknowledgements
 
