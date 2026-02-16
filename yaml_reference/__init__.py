@@ -73,6 +73,46 @@ class ReferenceAll:
         return cls(glob)
 
 
+class Flatten:
+    sequence: Sequence[Any]
+    yaml_tag = "!flatten"
+
+    def __init__(self, sequence: Sequence[Any]):
+        self.sequence = sequence
+
+    def __repr__(self):
+        return f"Flatten(sequence={self.sequence})"
+
+    def flattened(self) -> Sequence[Any]:
+        def _flatten_list(lst: list) -> list:
+            """Helper method to recursively flatten a list."""
+            flattened = []
+            for item in lst:
+                if isinstance(item, list):
+                    flattened.extend(_flatten_list(item))
+                else:
+                    flattened.append(item)
+            return flattened
+
+        # Recursively flatten nested sequences
+        result = []
+        for item in self.sequence:
+            if isinstance(item, Flatten):
+                # Recursively flatten nested Flatten objects
+                result.extend(item.flattened())
+            elif isinstance(item, list):
+                # Recursively flatten nested lists
+                result.extend(_flatten_list(item))
+            else:
+                result.append(item)
+        return result
+
+    @classmethod
+    def from_yaml(cls, constructor, node):
+        seq = constructor.construct_sequence(node)
+        return cls(seq)
+
+
 PathLike = Union[str, Path, os.PathLike]
 
 
@@ -120,6 +160,7 @@ def parse_yaml_with_references(
     yaml = YAML(typ="safe")
     yaml.register_class(Reference)
     yaml.register_class(ReferenceAll)
+    yaml.register_class(Flatten)
 
     with path.open("r") as f:
         parsed = yaml.load(f)
@@ -129,6 +170,13 @@ def parse_yaml_with_references(
 
 
 def _recursively_attribute_location_to_references(data: Any, base_path: Path):
+    if isinstance(data, Flatten):
+        return Flatten(
+            sequence=[
+                _recursively_attribute_location_to_references(item, base_path)
+                for item in data.sequence
+            ]
+        )
     if isinstance(data, Reference):
         if data.location is None:
             data.location = str(base_path)
@@ -187,6 +235,16 @@ def _recursively_resolve_references(
     """
     if visited_paths is None:
         visited_paths = set()
+
+    if isinstance(data, Flatten):
+        return Flatten(
+            sequence=[
+                _recursively_resolve_references(
+                    item, allow_paths=allow_paths, visited_paths=visited_paths
+                )
+                for item in data.sequence
+            ]
+        )
 
     if isinstance(data, Reference):
         abs_path = (Path(data.location).parent / data.path).resolve()
@@ -247,6 +305,21 @@ def _recursively_resolve_references(
         return data
 
 
+def flatten_sequences(data: Any) -> Any:
+    """
+    Given an object which may contain Flatten(...) objects which was parsed from a YAML document containing !flatten
+    tags, return the object without any Flatten(...) objects, but having flattened all sequences marked with them.
+    """
+    if isinstance(data, Flatten):
+        return data.flattened()
+    if isinstance(data, list):
+        return [flatten_sequences(item) for item in data]
+    elif isinstance(data, dict):
+        return {key: flatten_sequences(value) for key, value in data.items()}
+    else:
+        return data
+
+
 def load_yaml_with_references(
     file_path: PathLike, allow_paths: Sequence[PathLike] = []
 ) -> Any:
@@ -279,11 +352,18 @@ def load_yaml_with_references(
     # Initialize visited paths with the root file to detect self-references
     visited_paths = {path.resolve()}
 
-    return _recursively_resolve_references(
+    resolved = _recursively_resolve_references(
         parsed,
         allow_paths=allow_paths,  # type: ignore
         visited_paths=visited_paths,
     )
+    flattened = flatten_sequences(resolved)
+    return flattened
 
 
-__all__ = ["parse_yaml_with_references", "load_yaml_with_references"]
+__all__ = [
+    "parse_yaml_with_references",
+    "load_yaml_with_references",
+    "flatten_sequences",
+    "Flatten",
+]
