@@ -129,15 +129,15 @@ version: 3.1
 $ yaml-reference-cli root.yaml | yq -P > .compiled/root.yaml
 ```
 
-## Safety note
+## Circular reference protection
 
-As of now, the specification does not require any explicit protection against circular references. This package does not check for circular references and will result in an infinite loop (max recursion depth exceeded) if a circular reference is encountered. Onus is on the users of this package to ensure that circular references are not present in their referential YAML files.
+As required by the yaml-reference-specs specification, this package includes circular reference detection to prevent infinite recursion. If a circular reference is detected (e.g., A references B, B references C, C references A), a `ValueError` will be raised with a descriptive error message. This protects against self-references and circular chains in both `!reference` and `!reference-all` tags.
 
 ## Security considerations
 
-### Path restriction with `allow_paths`
+### Path restriction and `allow_paths`
 
-By default, `!reference` and `!reference-all` tags can only reference files within the same directory as the source YAML file. To allow references to files in other directories, you must explicitly specify allowed paths using the `allow_paths` parameter:
+By default, `!reference` and `!reference-all` tags can only reference files within the same directory as the source YAML file (or child subdirectories). To allow references to files in other disparate directory trees, you must explicitly specify allowed paths using the `allow_paths` parameter:
 
 ```python
 from yaml_reference import load_yaml_with_references
@@ -155,15 +155,11 @@ In the CLI, use the `--allow` flag:
 yaml-reference compile input.yml --allow /allowed/path1 --allow /allowed/path2
 ```
 
+Whether or not `allow_paths` is specified, the default behavior is to allow references to files in the same directory as the source YAML file (or subdirectories). "Back-navigating" out of a the root directory is not allowed (".." local references in a root YAML file). This provides a secure baseline to prevent unsafe access which is not explicitly allowed.
+
 ### Absolute path restrictions
 
-References using absolute paths (e.g., `/tmp/file.yml`) are explicitly rejected with a `ValueError`. All reference paths must be relative to the source file's directory.
-
-### Permission errors
-
-If a reference attempts to access a file outside the allowed paths, a `PermissionError` is raised. This prevents unauthorized file access through YAML references.
-
-Whether or not `allow_paths` is specified, the default behavior is to allow references to files in the same directory as the source YAML file (or subdirectories). "Back-navigating" out of a the root directory is not allowed (".." local references in a root YAML file). This provides a secure baseline to prevent unsafe access which is not explicitly allowed.
+References using absolute paths (e.g., `/tmp/file.yml`) are explicitly rejected with a `ValueError`. All reference paths must be relative to the source file's directory. If you absolutely must reference an absolute path, relative paths to symlinks can be used. Note that their target directories must be explicitly allowed to avoid permission errors (see the above section about "Path restriction and `allow_paths`").
 
 ## Acknowledgements
 

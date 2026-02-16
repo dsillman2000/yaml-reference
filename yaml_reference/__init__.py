@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, Sequence, Union
+from typing import Any, Optional, Sequence, Union
 
 from ruamel.yaml import YAML
 
@@ -148,11 +148,62 @@ def _recursively_attribute_location_to_references(data: Any, base_path: Path):
     return data
 
 
-def _recursively_resolve_references(data: Any, allow_paths: Sequence[Path]) -> Any:
+def _check_and_track_path(path: Path, visited_paths: set[Path]) -> None:
+    """
+    Check for circular reference and add path to visited set.
+
+    Args:
+        path: The file path to check and track.
+        visited_paths: Set of visited file paths.
+
+    Raises:
+        ValueError: If a circular reference is detected.
+    """
+    if path in visited_paths:
+        raise ValueError(
+            f"Circular reference detected: {path} has already been visited. "
+            f"Visited path chain: {visited_paths}"
+        )
+    visited_paths.add(path)
+
+
+def _recursively_resolve_references(
+    data: Any, allow_paths: Sequence[Path], visited_paths: Optional[set[Path]] = None
+) -> Any:
+    """
+    Recursively resolve references in YAML data.
+
+    Args:
+        data: The YAML data to resolve references in.
+        allow_paths: List of allowed paths for file access.
+        visited_paths: Set of file paths that have been visited during resolution.
+                      Used to detect circular references.
+
+    Returns:
+        The resolved YAML data with all references expanded.
+
+    Raises:
+        ValueError: If a circular reference is detected.
+    """
+    if visited_paths is None:
+        visited_paths = set()
+
     if isinstance(data, Reference):
         abs_path = (Path(data.location).parent / data.path).resolve()
+
+        # Check for circular reference and track path
+        _check_and_track_path(abs_path, visited_paths)
+
         parsed = parse_yaml_with_references(abs_path, allow_paths=allow_paths)
-        return _recursively_resolve_references(parsed, allow_paths=allow_paths)
+        resolved = _recursively_resolve_references(
+            parsed, allow_paths=allow_paths, visited_paths=visited_paths
+        )
+
+        # Remove current path from visited set after processing
+        visited_paths.remove(abs_path)
+
+        return resolved
+
     elif isinstance(data, ReferenceAll):
         glob_results = Path(data.location).parent.glob(data.glob)
         abs_paths = [path.resolve() for path in glob_results]
@@ -161,22 +212,35 @@ def _recursively_resolve_references(data: Any, allow_paths: Sequence[Path]) -> A
                 f'No files found matching glob pattern "{data.glob}" in directory "{Path(data.location).parent}"'
             )
         abs_paths = sorted(abs_paths, key=lambda x: str(x))
-        parsed = [
-            parse_yaml_with_references(path, allow_paths=allow_paths)
-            for path in abs_paths
-        ]
-        return [
-            _recursively_resolve_references(item, allow_paths=allow_paths)
-            for item in parsed
-        ]
+
+        resolved_items = []
+        for path in abs_paths:
+            # Check for circular reference and track path
+            _check_and_track_path(path, visited_paths)
+
+            parsed = parse_yaml_with_references(path, allow_paths=allow_paths)
+            resolved = _recursively_resolve_references(
+                parsed, allow_paths=allow_paths, visited_paths=visited_paths
+            )
+            resolved_items.append(resolved)
+
+            # Remove current path from visited set after processing
+            visited_paths.remove(path)
+
+        return resolved_items
+
     elif isinstance(data, list):
         return [
-            _recursively_resolve_references(item, allow_paths=allow_paths)
+            _recursively_resolve_references(
+                item, allow_paths=allow_paths, visited_paths=visited_paths
+            )
             for item in data
         ]
     elif isinstance(data, dict):
         return {
-            key: _recursively_resolve_references(value, allow_paths=allow_paths)
+            key: _recursively_resolve_references(
+                value, allow_paths=allow_paths, visited_paths=visited_paths
+            )
             for key, value in data.items()
         }
     else:
@@ -211,7 +275,15 @@ def load_yaml_with_references(
     allow_paths += [Path(file_path).parent.absolute()]
     path = _check_file_path(file_path, allow_paths=allow_paths)
     parsed = parse_yaml_with_references(path, allow_paths=allow_paths)
-    return _recursively_resolve_references(parsed, allow_paths=allow_paths)  # type: ignore
+
+    # Initialize visited paths with the root file to detect self-references
+    visited_paths = {path.resolve()}
+
+    return _recursively_resolve_references(
+        parsed,
+        allow_paths=allow_paths,  # type: ignore
+        visited_paths=visited_paths,
+    )
 
 
 __all__ = ["parse_yaml_with_references", "load_yaml_with_references"]
