@@ -43,6 +43,9 @@ from yaml_reference import load_yaml_with_references
 data = load_yaml_with_references("root.yaml")
 print(data)
 # {"networkConfigs": [{"network": "vpn","version": "1.1"},{"network": "nfs","version": "1.0"}],"services": ["website","database"],"version": "3.1"}
+
+# With path restrictions for security
+data = load_yaml_with_references("root.yaml", allow_paths=["/allowed/path"])
 ```
 
 Note that the `load_yaml_with_references` function instantiates a `ruamel.yaml.YAML` loader class (`typ='safe'`) to perform the deserialization of the YAML files, and returns a Python dictionary with the recursively-expanded YAML data.
@@ -55,6 +58,9 @@ from yaml_reference import parse_yaml_with_references
 data = parse_yaml_with_references("root.yaml")
 print(data["networkConfigs"])
 # ReferenceAll(glob="networks/*.yaml", location="/path/to/root.yaml")
+
+# With path restrictions for security
+data = parse_yaml_with_references("root.yaml", allow_paths=["/allowed/path"])
 ```
 
 ### VSCode squigglies
@@ -74,15 +80,18 @@ There is a CLI interface for this package which can be used to read a YAML file 
 
 ```bash
 $ yaml-reference-cli -h
-  usage: yaml-reference-cli [-h] input_file
+  usage: yaml-reference-cli [-h] [--allow ALLOW_PATHS] input_file
 
-  Compile a YAML file containing !reference tags into a new YAML file with resolved references. Expects a YAML file to be provided via the "input_file" argument. Outputs JSON content to stdout.
+  Compile a YAML file containing !reference tags into a new YAML file with resolved references. Expects a YAML file to be provided via the "input_file" argument.
+  Outputs JSON content to stdout.
 
   positional arguments:
-    input_file  Path to the input YAML file with references to resolve and print as JSON.
+    input_file           Path to the input YAML file with references to resolve and print as JSON.
 
   options:
-    -h, --help  show this help message and exit
+     -h, --help           show this help message and exit
+     --allow ALLOW_PATHS  Path to allow references from.
+```
 $ yaml-reference-cli root.yaml
   {
     "networkConfigs": [
@@ -124,9 +133,42 @@ $ yaml-reference-cli root.yaml | yq -P > .compiled/root.yaml
 
 As of now, the specification does not require any explicit protection against circular references. This package does not check for circular references and will result in an infinite loop (max recursion depth exceeded) if a circular reference is encountered. Onus is on the users of this package to ensure that circular references are not present in their referential YAML files.
 
+## Security considerations
+
+### Path restriction with `allow_paths`
+
+By default, `!reference` and `!reference-all` tags can only reference files within the same directory as the source YAML file. To allow references to files in other directories, you must explicitly specify allowed paths using the `allow_paths` parameter:
+
+```python
+from yaml_reference import load_yaml_with_references
+
+# Allow references from specific directories only
+data = load_yaml_with_references(
+    "config.yml",
+    allow_paths=["/allowed/path1", "/allowed/path2"]
+)
+```
+
+In the CLI, use the `--allow` flag:
+
+```bash
+yaml-reference compile input.yml --allow /allowed/path1 --allow /allowed/path2
+```
+
+### Absolute path restrictions
+
+References using absolute paths (e.g., `/tmp/file.yml`) are explicitly rejected with a `ValueError`. All reference paths must be relative to the source file's directory.
+
+### Permission errors
+
+If a reference attempts to access a file outside the allowed paths, a `PermissionError` is raised. This prevents unauthorized file access through YAML references.
+
+Whether or not `allow_paths` is specified, the default behavior is to allow references to files in the same directory as the source YAML file (or subdirectories). "Back-navigating" out of a the root directory is not allowed (".." local references in a root YAML file). This provides a secure baseline to prevent unsafe access which is not explicitly allowed.
+
 ## Acknowledgements
 
-Author(s):
+Contributor(s):
 
 - David Sillman <dsillman2000@gmail.com>
   - Personal website: https://www.dsillman.com
+- Ryan Johnson
