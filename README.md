@@ -1,6 +1,6 @@
 # yaml-reference
 
-Using `ruamel.yaml`, support cross-file references in YAML files using tags `!reference` and `!reference-all`.
+Using `ruamel.yaml`, support cross-file references in YAML files using tags `!reference`, `!reference-all`, and `!flatten`.
 
 Install the package from PyPI with:
 
@@ -15,7 +15,7 @@ uv add yaml-reference
 
 ## Spec
 
-This Python library implements the YAML specification for cross-file references in YAML files using tags `!reference` and `!reference-all` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
+This Python library implements the YAML specification for cross-file references in YAML files using tags `!reference`, `!reference-all`, and `!flatten` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
 ## Example
 
@@ -32,6 +32,11 @@ services:
 networkConfigs:
   !reference-all
   glob: "networks/*.yaml"
+
+tags: !flatten
+  - !reference { path: "common/tags.yaml" }
+  - "web"
+  - "service"
 
 ```
 
@@ -70,7 +75,8 @@ To get red of red squigglies in VSCode when using the `!reference` and `!referen
 ```json
     "yaml.customTags": [
         "!reference mapping",
-        "!reference-all mapping"
+        "!reference-all mapping",
+        "!flatten sequence"
     ]
 ```
 
@@ -108,6 +114,14 @@ $ yaml-reference-cli root.yaml
       "website",
       "database"
     ],
+    "tags": [
+      "common:aws",
+      "common:http",
+      "common:security",
+      "common:waf",
+      "web",
+      "service"
+    ],
     "version": "3.1"
   }
 ```
@@ -124,6 +138,13 @@ networkConfigs:
 services:
   - website
   - database
+tags:
+  - common:aws
+  - common:http
+  - common:security
+  - common:waf
+  - web
+  - service
 version: 3.1
 # Pipe it to a result file
 $ yaml-reference-cli root.yaml | yq -P > .compiled/root.yaml
