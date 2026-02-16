@@ -129,9 +129,9 @@ version: 3.1
 $ yaml-reference-cli root.yaml | yq -P > .compiled/root.yaml
 ```
 
-## Safety note
+## Circular reference protection
 
-As of now, the specification does not require any explicit protection against circular references. This package does not check for circular references and will result in an infinite loop (max recursion depth exceeded) if a circular reference is encountered. Onus is on the users of this package to ensure that circular references are not present in their referential YAML files.
+As required by the yaml-reference-specs specification, this package includes circular reference detection to prevent infinite recursion. If a circular reference is detected (e.g., A references B, B references C, C references A), a `ValueError` will be raised with a descriptive error message. This protects against self-references and circular chains in both `!reference` and `!reference-all` tags.
 
 ## Security considerations
 
