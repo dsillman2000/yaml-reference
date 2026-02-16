@@ -91,7 +91,7 @@ $ yaml-reference-cli -h
   options:
      -h, --help           show this help message and exit
      --allow ALLOW_PATHS  Path to allow references from.
-```
+
 $ yaml-reference-cli root.yaml
   {
     "networkConfigs": [
