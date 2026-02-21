@@ -23,11 +23,9 @@ jobs:
             - name: Install python dependencies
               run: uv sync
 
-            - name: Install go
-              run: sudo apt-get install -y golang
-
-            - name: Install spec project
-              run: go install github.com/dsillman2000/yaml-reference-specs@latest
-
             - name: Run spec tests
-              run: YAML_REFERENCE_CLI_EXECUTABLE=$PWD/.venv/bin/yaml-reference-cli yaml-reference-specs
+              run: |
+                  sudo apt-get install -y golang
+                  go install github.com/dsillman2000/yaml-reference-specs@latest
+                  export YAML_REFERENCE_CLI_EXECUTABLE=$PWD/.venv/bin/yaml-reference-cli
+                  yaml-reference-specs
