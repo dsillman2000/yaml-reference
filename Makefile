@@ -8,6 +8,12 @@ test:
 	@uv run pytest
 	@echo "Tests completed."
 
+spec-test:
+	@echo "Running spec tests..."
+	@go install github.com/dsillman2000/yaml-reference-specs@latest
+	@YAML_REFERENCE_CLI_EXECUTABLE=$$PWD/.venv/bin/yaml-reference-cli yaml-reference-specs
+	@echo "Spec tests completed."
+
 format:
 	@echo "Formatting code..."
 	@uv run ruff format
