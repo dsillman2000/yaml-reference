@@ -1,0 +1,56 @@
+name: YAML Reference Specs status badge
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+jobs:
+    audit:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: "3.12"
+
+            - name: Install uv
+              run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+            - name: Install Python dependencies
+              run: uv sync
+
+            - name: Install and run test suite
+              id: test
+              run: |
+                  version=$(curl -sL https://api.github.com/repos/dsillman2000/yaml-reference-specs/releases/latest | jq -r .tag_name)
+                  echo "version=$version" >> $GITHUB_OUTPUT
+                  go install github.com/dsillman2000/yaml-reference-specs@${version}
+                  YAML_REFERENCE_CLI_EXECUTABLE=$(pwd)/.venv/bin/yaml-reference-cli $HOME/go/bin/yaml-reference-specs
+                  if $?; then
+                    echo "status=passing" >> $GITHUB_OUTPUT
+                    echo "color=brightgreen" >> $GITHUB_OUTPUT
+                  else
+                    echo "status=failing" >> $GITHUB_OUTPUT
+                    echo "color=red" >> $GITHUB_OUTPUT
+                  fi
+
+            - name: Update README badge
+              run: |
+                  fmtversion=$(echo ${{ steps.test.outputs.version }} | sed 's/-/--/g')
+                  BADGE="![Spec Status](https://img.shields.io/badge/spec%20${fmtversion}-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2F${{ steps.test.outputs.version }})"
+                  sed -i 's|!\[Spec Status\].*|'"$BADGE"'|g' README.md
+
+            - name: Commit and push
+              if: always()
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add README.md
+                  git commit -m "chore: update audit badge" || true
+                  git push

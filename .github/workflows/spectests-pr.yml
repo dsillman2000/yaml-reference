@@ -25,7 +25,6 @@ jobs:
 
       - name: Run spec tests
         run: |
-          # sudo apt update && sudo apt upgrade -y && sudo apt-get install -y golang
           go install github.com/dsillman2000/yaml-reference-specs@latest
           export YAML_REFERENCE_CLI_EXECUTABLE=$PWD/.venv/bin/yaml-reference-cli
           $HOME/go/bin/yaml-reference-specs
