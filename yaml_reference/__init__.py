@@ -74,6 +74,16 @@ class ReferenceAll:
 
 
 class Flatten:
+    """Represents a flattening operation for nested sequences.
+
+    This class is used as a marker for YAML flattens and is registered
+    with ruamel.yaml to handle the `!flatten` tag. It recursively flattens
+    nested sequences while preserving non-sequence items.
+
+    Args:
+        sequence (Sequence[Any]): A sequence potentially containing nested sequences.
+    """
+
     sequence: Sequence[Any]
     yaml_tag = "!flatten"
 
@@ -84,6 +94,16 @@ class Flatten:
         return f"Flatten(sequence={self.sequence})"
 
     def flattened(self) -> Sequence[Any]:
+        """Recursively flatten this sequence.
+
+        Processes the stored sequence, flattening all nested lists and sequences
+        while recursively handling nested Flatten and Merge objects. Non-sequence
+        items are preserved as-is.
+
+        Returns:
+            Sequence[Any]: The flattened sequence.
+        """
+
         def _flatten_list(lst: list) -> list:
             """Helper method to recursively flatten a list."""
             flattened = []
@@ -117,6 +137,18 @@ class Flatten:
 
 
 class Merge:
+    """Represents a merge operation combining multiple YAML mappings.
+
+    This class is used as a marker for YAML merges and is registered
+    with ruamel.yaml to handle the `!merge` tag. It combines multiple
+    mappings (dictionaries) into a single mapping with later mappings
+    overriding keys from earlier ones.
+
+    Args:
+        sequence (Sequence[Any]): A sequence of mappings (dicts) to be merged.
+                                  Later mappings override earlier ones.
+    """
+
     sequence: Sequence[Any]
     yaml_tag = "!merge"
 
@@ -127,13 +159,25 @@ class Merge:
         return f"Merge(sequence={self.sequence})"
 
     def merged(self) -> dict:
+        """Recursively merge all mappings in this sequence.
+
+        Flattens nested sequences first, then merges all mapping items
+        sequentially. Later mappings override keys from earlier ones.
+        Non-mapping items in the sequence (after flattening) raise a ValueError.
+
+        Returns:
+            dict: The merged mapping.
+
+        Raises:
+            ValueError: If the sequence contains non-mapping items after flattening.
+        """
         # First, flatten the sequence to ensure all items are at the same level
         flattened_sequence = flatten_sequences(Flatten(self.sequence))
         merged_dict = {}
         for item in flattened_sequence:
             if isinstance(item, dict):
                 merged_dict |= merge_mappings(item)
-            if isinstance(item, Merge):
+            elif isinstance(item, Merge):
                 # Recursively merge nested Merge objects
                 merged_dict |= item.merged()
             elif not isinstance(item, dict):
