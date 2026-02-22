@@ -14,6 +14,11 @@ spec-test:
 	@YAML_REFERENCE_CLI_EXECUTABLE=$$PWD/.venv/bin/yaml-reference-cli yaml-reference-specs
 	@echo "Spec tests completed."
 
+spec-badge:
+	@echo "Generating spec badge..."
+	@sh scripts/update-readme-badge.sh
+	@echo "Spec badge updated."
+
 format:
 	@echo "Formatting code..."
 	@uv run ruff format

@@ -1,6 +1,6 @@
 # yaml-reference
 
-Using `ruamel.yaml`, support cross-file references in YAML files using tags `!reference`, `!reference-all`, and `!flatten`.
+Using `ruamel.yaml`, support cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, and `!merge`.
 
 Install the package from PyPI with:
 
@@ -14,9 +14,9 @@ uv add yaml-reference
 ```
 
 ## Spec
-![Spec Status](https://img.shields.io/badge/spec%20v0.2.4--4-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.4-4)
+![Spec Status](https://img.shields.io/badge/spec%20v0.2.5--0-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.5-0)
 
-This Python library implements the YAML specification for cross-file references in YAML files using tags `!reference`, `!reference-all`, and `!flatten` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
+This Python library implements the YAML specification for cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, and `!merge` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
 ## Example
 
@@ -38,6 +38,10 @@ tags: !flatten
   - !reference { path: "common/tags.yaml" }
   - "web"
   - "service"
+
+config: !merge
+  - !reference { path: "config/defaults.yaml" }
+  - !reference { path: "config/overrides.yaml" }
 
 ```
 
@@ -69,15 +73,41 @@ print(data["networkConfigs"])
 data = parse_yaml_with_references("root.yaml", allow_paths=["/allowed/path"])
 ```
 
+### The `!merge` Tag
+
+The `!merge` tag combines multiple YAML mappings (dictionaries) into a single mapping. This is useful for composing configuration from multiple sources or applying overrides. When you use `!merge`, you provide a sequence of mappings that will be merged together, with later mappings overriding keys from earlier ones.
+
+```yaml
+# Example: Merge default and override configurations
+config: !merge
+  - {host: "localhost", port: 8080, debug: false}
+  - {port: 9000, debug: true}  # Overrides port and debug from the first mapping
+```
+
+When loaded with `load_yaml_with_references`, this becomes `{"host": "localhost", "port": 9000, "debug": true}`. The `!merge` tag can also be nested and combined with `!reference` and `!flatten` tags for complex YAML composition scenarios.
+
+Note that, if a nested sequence of mappings is provided to `!merge`, the sequence argument will be flattened first, and then the resulting mappings will be merged together. For example:
+
+```yaml
+config: !merge
+  - - a: 1
+    - b: 2
+  - c: 3
+  - - [c: 5, a: 5]
+```
+
+Will be processed into `{"config": {"a": 5, "b": 2, "c": 5}}` because the nested sequence of mappings will be flattened into a single sequence of mappings before merging.
+
 ### VSCode squigglies
 
-To get red of red squigglies in VSCode when using the `!reference` and `!reference-all` tags, you can add the following to your `settings.json` file:
+To get red of red squigglies in VSCode when using the `!reference`, `!reference-all`, `!flatten`, and `!merge` tags, you can add the following to your `settings.json` file:
 
 ```json
     "yaml.customTags": [
         "!reference mapping",
         "!reference-all mapping",
-        "!flatten sequence"
+        "!flatten sequence",
+        "!merge sequence"
     ]
 ```
 
