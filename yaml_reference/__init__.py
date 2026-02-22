@@ -100,12 +100,47 @@ class Flatten:
             if isinstance(item, Flatten):
                 # Recursively flatten nested Flatten objects
                 result.extend(item.flattened())
+            elif isinstance(item, Merge):
+                # Recursively flatten sequences in Merge objects as well
+                result.append(item.merged())
             elif isinstance(item, list):
                 # Recursively flatten nested lists
                 result.extend(_flatten_list(item))
             else:
                 result.append(item)
         return result
+
+    @classmethod
+    def from_yaml(cls, constructor, node):
+        seq = constructor.construct_sequence(node)
+        return cls(seq)
+
+
+class Merge:
+    sequence: Sequence[Any]
+    yaml_tag = "!merge"
+
+    def __init__(self, sequence: Sequence[Any]):
+        self.sequence = sequence
+
+    def __repr__(self):
+        return f"Merge(sequence={self.sequence})"
+
+    def merged(self) -> dict:
+        # First, flatten the sequence to ensure all items are at the same level
+        flattened_sequence = flatten_sequences(Flatten(self.sequence))
+        merged_dict = {}
+        for item in flattened_sequence:
+            if isinstance(item, dict):
+                merged_dict |= merge_mappings(item)
+            if isinstance(item, Merge):
+                # Recursively merge nested Merge objects
+                merged_dict |= item.merged()
+            elif not isinstance(item, dict):
+                raise ValueError(
+                    f"All items in the sequence for !merge must be mappings. Got: {item}"
+                )
+        return merged_dict
 
     @classmethod
     def from_yaml(cls, constructor, node):
@@ -161,6 +196,7 @@ def parse_yaml_with_references(
     yaml.register_class(Reference)
     yaml.register_class(ReferenceAll)
     yaml.register_class(Flatten)
+    yaml.register_class(Merge)
 
     with path.open("r") as f:
         parsed = yaml.load(f)
@@ -172,6 +208,13 @@ def parse_yaml_with_references(
 def _recursively_attribute_location_to_references(data: Any, base_path: Path):
     if isinstance(data, Flatten):
         return Flatten(
+            sequence=[
+                _recursively_attribute_location_to_references(item, base_path)
+                for item in data.sequence
+            ]
+        )
+    if isinstance(data, Merge):
+        return Merge(
             sequence=[
                 _recursively_attribute_location_to_references(item, base_path)
                 for item in data.sequence
@@ -246,6 +289,16 @@ def _recursively_resolve_references(
             ]
         )
 
+    if isinstance(data, Merge):
+        return Merge(
+            sequence=[
+                _recursively_resolve_references(
+                    item, allow_paths=allow_paths, visited_paths=visited_paths
+                )
+                for item in data.sequence
+            ]
+        )
+
     if isinstance(data, Reference):
         abs_path = (Path(data.location).parent / data.path).resolve()
 
@@ -312,10 +365,28 @@ def flatten_sequences(data: Any) -> Any:
     """
     if isinstance(data, Flatten):
         return data.flattened()
+    if isinstance(data, Merge):
+        # Recursively flatten sequences in Merge objects as well
+        return Merge(sequence=[flatten_sequences(item) for item in data.sequence])
     if isinstance(data, list):
         return [flatten_sequences(item) for item in data]
     elif isinstance(data, dict):
         return {key: flatten_sequences(value) for key, value in data.items()}
+    else:
+        return data
+
+
+def merge_mappings(data: Any) -> Any:
+    """
+    Given an object which may contain Merge(...) objects which was parsed from a YAML document containing !merge
+    tags, return the object without any Merge(...) objects, but having merged all mappings marked with them.
+    """
+    if isinstance(data, Merge):
+        return data.merged()
+    if isinstance(data, list):
+        return [merge_mappings(item) for item in data]
+    elif isinstance(data, dict):
+        return {key: merge_mappings(value) for key, value in data.items()}
     else:
         return data
 
@@ -358,7 +429,8 @@ def load_yaml_with_references(
         visited_paths=visited_paths,
     )
     flattened = flatten_sequences(resolved)
-    return flattened
+    merged = merge_mappings(flattened)
+    return merged
 
 
 __all__ = [
@@ -366,4 +438,6 @@ __all__ = [
     "load_yaml_with_references",
     "flatten_sequences",
     "Flatten",
+    "merge_mappings",
+    "Merge",
 ]
