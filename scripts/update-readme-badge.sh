@@ -1,8 +1,7 @@
 version=$(curl -sL https://api.github.com/repos/dsillman2000/yaml-reference-specs/releases/latest | jq -r .tag_name)
-go install github.com/dsillman2000/yaml-reference-specs@${version}
 status="failing"
 color="red"
-YAML_REFERENCE_CLI_EXECUTABLE=$(pwd)/.venv/bin/yaml-reference-cli $HOME/go/bin/yaml-reference-specs
+YAML_REFERENCE_CLI_EXECUTABLE=$(pwd)/.venv/bin/yaml-reference-cli go run github.com/dsillman2000/yaml-reference-specs@${version}
 if [ $? -eq 0 ]; then
     status="passing"
     color="brightgreen"
