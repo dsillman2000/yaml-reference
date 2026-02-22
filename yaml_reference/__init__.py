@@ -121,8 +121,8 @@ class Flatten:
                 # Recursively flatten nested Flatten objects
                 result.extend(item.flattened())
             elif isinstance(item, Merge):
-                # Recursively flatten sequences in Merge objects as well
-                result.append(item.merged())
+                # Keep merges in tact - they will be evaluated later.
+                result.append(item)
             elif isinstance(item, list):
                 # Recursively flatten nested lists
                 result.extend(_flatten_list(item))

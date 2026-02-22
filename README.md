@@ -93,14 +93,14 @@ config: !merge
   - - a: 1
     - b: 2
   - c: 3
-  - - [c: 5, a: 5]
+  - - [{c: 5, a: 5}]
 ```
 
 Will be processed into `{"config": {"a": 5, "b": 2, "c": 5}}` because the nested sequence of mappings will be flattened into a single sequence of mappings before merging.
 
 ### VSCode squigglies
 
-To get red of red squigglies in VSCode when using the `!reference`, `!reference-all`, `!flatten`, and `!merge` tags, you can add the following to your `settings.json` file:
+To get rid of red squigglies in VSCode when using the `!reference`, `!reference-all`, `!flatten`, and `!merge` tags, you can add the following to your `settings.json` file:
 
 ```json
     "yaml.customTags": [
