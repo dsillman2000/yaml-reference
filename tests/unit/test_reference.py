@@ -389,7 +389,7 @@ def test_anchor_in_deeply_nested_structure(stage_files):
 
 
 def test_empty_anchor_list(stage_files):
-    """Test !reference-all with anchor returns empty list when files don't have the anchor."""
+    """Test that !reference-all with a missing anchor raises ValueError."""
     files = {
         "main.yml": "matching: !reference-all { glob: ./*.yml, anchor: target }",
         "file1.yml": "other: &other value1",
