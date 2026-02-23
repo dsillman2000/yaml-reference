@@ -121,7 +121,7 @@ class Flatten:
                 # Recursively flatten nested Flatten objects
                 result.extend(item.flattened())
             elif isinstance(item, Merge):
-                # Keep merges in tact - they will be evaluated later.
+                # Keep merges intact - they will be evaluated later.
                 result.append(item)
             elif isinstance(item, list):
                 # Recursively flatten nested lists
@@ -175,12 +175,12 @@ class Merge:
         flattened_sequence = flatten_sequences(Flatten(self.sequence))
         merged_dict = {}
         for item in flattened_sequence:
-            if isinstance(item, dict):
-                merged_dict |= merge_mappings(item)
-            elif isinstance(item, Merge):
+            if isinstance(item, Merge):
                 # Recursively merge nested Merge objects
-                merged_dict |= item.merged()
-            elif not isinstance(item, dict):
+                item |= item.merged()
+            if isinstance(item, dict):
+                merged_dict |= item
+            else:
                 raise ValueError(
                     f"All items in the sequence for !merge must be mappings. Got: {item}"
                 )
@@ -426,7 +426,7 @@ def merge_mappings(data: Any) -> Any:
     tags, return the object without any Merge(...) objects, but having merged all mappings marked with them.
     """
     if isinstance(data, Merge):
-        return data.merged()
+        return merge_mappings(data.merged())
     if isinstance(data, list):
         return [merge_mappings(item) for item in data]
     elif isinstance(data, dict):
