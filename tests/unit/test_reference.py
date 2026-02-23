@@ -423,6 +423,5 @@ config: &config !merge
     }
     stg = stage_files(files)
     data = load_yaml_with_references(stg / "main.yml")
-    print("Data = ", data)
     assert data["template"]["project"] == "Demo"
     assert data["template"]["environment"] == "production"
