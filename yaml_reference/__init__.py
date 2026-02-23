@@ -15,6 +15,8 @@ class Reference:
 
     Args:
         path (str): Relative path to the referenced YAML file. Explicitly provided by the user in the YAML document.
+        anchor (Optional[str]): Optional anchor to extract a specific section from the referenced YAML file. Explicitly
+            provided by the user in the YAML document.
         location (str): Absolute path to the YAML file containing the reference. Implicitly provided by the
             YAML parser.
     """
@@ -55,6 +57,8 @@ class ReferenceAll:
 
     Args:
         glob (str): Glob pattern to match multiple YAML files.
+        anchor (Optional[str]): Optional anchor to extract specific sections from the matched YAML files.
+        location (str): Absolute path to the YAML file containing the reference. Implicitly provided by the YAML parser.
     """
 
     glob: str
@@ -74,7 +78,10 @@ class ReferenceAll:
         self.location = None  # type:ignore
 
     def __repr__(self):
-        return f'ReferenceAll(glob="{self.glob}", location="{self.location}")'
+        anchor_component = (
+            f', anchor="{self.anchor}"' if self.anchor is not None else ""
+        )
+        return f'ReferenceAll(glob="{self.glob}"{anchor_component}, location="{self.location}")'
 
     @classmethod
     def from_yaml(cls, constructor, node):
