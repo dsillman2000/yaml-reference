@@ -25,6 +25,5 @@ jobs:
 
       - name: Run spec tests
         run: |
-          go install github.com/dsillman2000/yaml-reference-specs@latest
-          export YAML_REFERENCE_CLI_EXECUTABLE=$PWD/.venv/bin/yaml-reference-cli
-          $HOME/go/bin/yaml-reference-specs
+          version=$(curl -sL https://api.github.com/repos/dsillman2000/yaml-reference-specs/releases/latest | jq -r .tag_name)
+          YAML_REFERENCE_CLI_EXECUTABLE=$PWD/.venv/bin/yaml-reference-cli go run github.com/dsillman2000/yaml-reference-specs@$version
