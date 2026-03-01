@@ -14,7 +14,7 @@ uv add yaml-reference
 ```
 
 ## Spec
-![Spec Status](https://img.shields.io/badge/spec%20v0.2.5--1-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.5-1)
+![Spec Status](https://img.shields.io/badge/spec%20v0.2.6--3-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.6-3)
 
 This Python library implements the YAML specification for cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, and `!merge` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
@@ -97,6 +97,57 @@ config: !merge
 ```
 
 Will be processed into `{"config": {"a": 5, "b": 2, "c": 5}}` because the nested sequence of mappings will be flattened into a single sequence of mappings before merging.
+
+### Using Anchors with `!reference` and `!reference-all`
+
+Both `!reference` and `!reference-all` tags support an optional `anchor` parameter that allows you to import only a specific anchored section from a file, rather than the entire file contents. This is useful when you want to extract a particular part of a larger YAML document.
+
+```yaml
+# main.yaml
+database_config: !reference
+  path: "config.yaml"
+  anchor: db_settings
+
+api_keys: !reference-all
+  glob: "secrets/*.yaml"
+  anchor: api_key
+```
+
+In this example, if `config.yaml` contains multiple anchored sections, only the one labeled with `&db_settings` will be imported. Similarly, `!reference-all` will extract the `&api_key` anchor from each file matching the glob pattern.
+
+Here's a practical example:
+
+```yaml
+# config.yaml
+app_name: MyApplication
+db_settings: &db_settings
+  host: localhost
+  port: 5432
+  database: myapp
+cache_settings: &cache_settings
+  ttl: 3600
+```
+
+```yaml
+# main.yaml
+config: !reference
+  path: "config.yaml"
+  anchor: db_settings
+```
+
+When loaded with `load_yaml_with_references("main.yaml")`, the result will be:
+
+```python
+{
+  "config": {
+    "host": "localhost",
+    "port": 5432,
+    "database": "myapp"
+  }
+}
+```
+
+Note that the `app_name` and `cache_settings` fields from `config.yaml` are not included in the result because only the anchored section was imported. If the specified anchor is not found in the referenced file, a `ValueError` will be raised.
 
 ### VSCode squigglies
 

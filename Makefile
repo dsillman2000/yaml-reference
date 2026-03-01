@@ -10,8 +10,7 @@ test:
 
 spec-test:
 	@echo "Running spec tests..."
-	@go install github.com/dsillman2000/yaml-reference-specs@latest
-	@YAML_REFERENCE_CLI_EXECUTABLE=$$PWD/.venv/bin/yaml-reference-cli yaml-reference-specs
+	@sh scripts/spec-test.sh
 	@echo "Spec tests completed."
 
 spec-badge:
