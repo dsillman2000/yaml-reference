@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import IO, Any, Optional, Sequence, Union
 
 from ruamel.yaml import YAML, events
+from ruamel.yaml.tag import Tag
 
 
 class Reference:
@@ -245,8 +246,15 @@ def _extract_anchor_from_parser_events(yaml: YAML, stream: IO, anchor: str) -> A
             anchor_lookup[anchor_str] = [event]
             if isinstance(event, (events.SequenceStartEvent, events.MappingStartEvent)):
                 level_lookup[anchor_str] = 1
-        elif keys := _nonzero_keys(level_lookup):
+        if keys := _nonzero_keys(level_lookup):
             for key in keys:
+                # Don't double-add an event that was just registered as a new anchor's start
+                if (
+                    hasattr(event, "anchor")
+                    and event.anchor is not None
+                    and str(event.anchor) == key
+                ):
+                    continue
                 anchor_lookup[key] += [event]
                 if isinstance(
                     event, (events.SequenceStartEvent, events.MappingStartEvent)
@@ -266,16 +274,50 @@ def _extract_anchor_from_parser_events(yaml: YAML, stream: IO, anchor: str) -> A
         ] + anchor_content
     if not isinstance(anchor_content[-1], events.DocumentEndEvent):
         anchor_content += [events.DocumentEndEvent(), events.StreamEndEvent()]
-    # Check - do we have any unresolved aliases?
-    imputed = []
-    for event in anchor_content:
-        if isinstance(event, events.AliasEvent):
-            resolved_anchor = anchor_lookup[event.anchor]
-            imputed += resolved_anchor
-        else:
-            imputed += [event]
+
+    # Check - do we have any unresolved aliases? Recursively resolve.
+    def _resolve_aliases(my_events: list[events.Event]) -> list[events.Event]:
+        resolved = []
+        for event in my_events:
+            if isinstance(event, events.AliasEvent):
+                if event.anchor not in anchor_lookup:
+                    raise ValueError(
+                        f"Alias '{event.anchor}' not found in the YAML document."
+                    )
+                resolved += _resolve_aliases(anchor_lookup[event.anchor])
+            else:
+                resolved.append(event)
+        return resolved
+
+    imputed = _resolve_aliases(anchor_content)
+
+    # Fix scalar events with no ctag set.  When a scalar is extracted from a
+    # mapping-value context and re-emitted as a document root, ruamel.yaml's
+    # emitter accesses `event.ctag.handle`.  If ctag is None, the emitter
+    # crashes — particularly for empty-string values where it unconditionally
+    # reads ctag.  We assign a proper Tag object and set implicit=(True,True)
+    # so the emitter can omit the tag; yaml.load() still resolves the correct
+    # type from the value and style.
+    _str_tag = Tag(suffix="tag:yaml.org,2002:str")
+    for event in imputed:
+        if (
+            isinstance(event, events.ScalarEvent)
+            and getattr(event, "ctag", None) is None
+        ):
+            event.ctag = _str_tag
+            event.implicit = (True, True)
+
     strio = io.StringIO()
-    yaml.__class__().emit(imputed, strio)
+    try:
+        yaml.__class__().emit(imputed, strio)
+    except Exception as e:
+        msg = f"Error emitting YAML events for anchor '{anchor}': {e}"
+        msg += (
+            "\nEvent stream:\n[\n  "
+            + ",\n  ".join(str(event) for event in imputed)
+            + "\n]"
+        )
+        raise ValueError(msg)
     strio.seek(0)
     document = yaml.load(strio)
     return document

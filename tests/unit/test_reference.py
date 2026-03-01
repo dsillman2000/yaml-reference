@@ -425,3 +425,51 @@ config: &config !merge
     data = load_yaml_with_references(stg / "main.yml")
     assert data["template"]["project"] == "Demo"
     assert data["template"]["environment"] == "production"
+
+
+def test_anchor_reference_root_level(stage_files):
+    """Test extracting a root-level anchor that contains nested anchored scalars.
+
+    When a root-level anchor (&root) wraps a mapping whose values include nested
+    anchors (e.g. &deep), the nested anchored events must still be included in the
+    root anchor's event stream. Previously, the elif branch caused them to be
+    skipped, leaving a mapping key with no value.
+    """
+    files = {
+        "main.yml": (
+            "whole: !reference { path: ./depth.yml, anchor: root }\n"
+            "deep: !reference { path: ./depth.yml, anchor: deep }\n"
+        ),
+        "depth.yml": (
+            "&root\nlevel1:\n  level2:\n    level3:\n      secret: &deep 42\n"
+        ),
+    }
+    stg = stage_files(files)
+    data = load_yaml_with_references(stg / "main.yml")
+    assert data["whole"] == {"level1": {"level2": {"level3": {"secret": 42}}}}
+    assert data["deep"] == 42
+
+
+def test_anchor_reference_scalar_types(stage_files):
+    """Test extracting scalar anchors for null, bool, and empty-string values.
+
+    When a scalar like &emptyStr "" is extracted and re-emitted as a standalone
+    document root, ruamel.yaml's emitter accesses event.ctag.handle.  If ctag is
+    None the emitter crashes.  This test verifies that null, bool, and empty-string
+    scalars can all be extracted via anchor references without error.
+    """
+    files = {
+        "main.yml": (
+            "a: !reference { path: ./scalars.yml, anchor: nullVal }\n"
+            "b: !reference { path: ./scalars.yml, anchor: boolVal }\n"
+            "c: !reference { path: ./scalars.yml, anchor: emptyStr }\n"
+        ),
+        "scalars.yml": (
+            'nothing: &nullVal null\nflag: &boolVal true\nblank: &emptyStr ""\n'
+        ),
+    }
+    stg = stage_files(files)
+    data = load_yaml_with_references(stg / "main.yml")
+    assert data["a"] is None
+    assert data["b"] is True
+    assert data["c"] == ""
