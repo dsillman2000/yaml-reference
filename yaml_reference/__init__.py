@@ -512,17 +512,21 @@ def _recursively_resolve_references(
         if not abs_paths:
             return []
 
-        abs_paths = sorted(abs_paths, key=lambda x: str(x))
+        # Precompute allowed paths sequence once to avoid repeated list()
+        # construction in the comprehension below.
+        allowed_paths_seq = list(allow_paths)
 
         # Security invariant: filter out disallowed / nonexistent paths *before*
         # opening any file.  Relative-path violations are silently omitted here;
         # absolute-path violations are caught earlier in ReferenceAll.__init__.
-        abs_paths = [p for p in abs_paths if _is_path_allowed(p, list(allow_paths))]
+        abs_paths = [p for p in abs_paths if _is_path_allowed(p, allowed_paths_seq)]
 
         # All matched paths were disallowed → silent omission, return empty list.
         if not abs_paths:
             return []
 
+        # Sort only the allowed paths to avoid sorting entries that will be dropped.
+        abs_paths = sorted(abs_paths, key=lambda x: str(x))
         resolved_items = []
         for path in abs_paths:
             # Check for circular reference and track path
