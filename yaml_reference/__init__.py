@@ -400,6 +400,32 @@ def _recursively_attribute_location_to_references(data: Any, base_path: Path):
     return data
 
 
+def _is_path_allowed(path: Path, allow_paths: Sequence[Path]) -> bool:
+    """Check whether a resolved path is accessible given the allow_paths configuration.
+
+    Unlike `_check_file_path`, this never raises; it returns `False` for paths that
+    do not exist, are not regular files, or fall outside every entry in *allow_paths*.
+    An empty *allow_paths* sequence means "no directory restrictions" (all existing files
+    are considered allowed).
+
+    Args:
+        path: Resolved, absolute path to check.
+        allow_paths: List of allowed directory paths.
+
+    Returns:
+        True if the path is an accessible file within an allowed directory (or no
+        restrictions are in place). False otherwise.
+    """
+    if not path.exists() or not path.is_file():
+        return False
+    if not allow_paths:
+        return True
+    for allow_path in allow_paths:
+        if path.is_relative_to(allow_path):
+            return True
+    return False
+
+
 def _check_and_track_path(path: Path, visited_paths: set[Path]) -> None:
     """
     Check for circular reference and add path to visited set.
@@ -481,12 +507,26 @@ def _recursively_resolve_references(
     elif isinstance(data, ReferenceAll):
         glob_results = Path(data.location).parent.glob(data.glob)
         abs_paths = [path.resolve() for path in glob_results]
-        if not abs_paths:
-            raise FileNotFoundError(
-                f'No files found matching glob pattern "{data.glob}" in directory "{Path(data.location).parent}"'
-            )
-        abs_paths = sorted(abs_paths, key=lambda x: str(x))
 
+        # Empty glob match -> silent omission, return empty list.
+        if not abs_paths:
+            return []
+
+        # Precompute allowed paths sequence once to avoid repeated list()
+        # construction in the comprehension below.
+        allowed_paths_seq = list(allow_paths)
+
+        # Security invariant: filter out disallowed / nonexistent paths *before*
+        # opening any file.  Relative-path violations are silently omitted here;
+        # absolute-path violations are caught earlier in ReferenceAll.__init__.
+        abs_paths = [p for p in abs_paths if _is_path_allowed(p, allowed_paths_seq)]
+
+        # All matched paths were disallowed → silent omission, return empty list.
+        if not abs_paths:
+            return []
+
+        # Sort only the allowed paths to avoid sorting entries that will be dropped.
+        abs_paths = sorted(abs_paths, key=lambda x: str(x))
         resolved_items = []
         for path in abs_paths:
             # Check for circular reference and track path

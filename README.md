@@ -14,7 +14,7 @@ uv add yaml-reference
 ```
 
 ## Spec
-![Spec Status](https://img.shields.io/badge/spec%20v0.2.6--3-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.6-3)
+![Spec Status](https://img.shields.io/badge/spec%20v0.2.6--4-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.6-4)
 
 This Python library implements the YAML specification for cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, and `!merge` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
@@ -259,6 +259,21 @@ yaml-reference compile input.yml --allow /allowed/path1 --allow /allowed/path2
 ```
 
 Whether or not `allow_paths` is specified, the default behavior is to allow references to files in the same directory as the source YAML file (or subdirectories). "Back-navigating" out of a the root directory is not allowed (".." local references in a root YAML file). This provides a secure baseline to prevent unsafe access which is not explicitly allowed.
+
+### Glob matching behavior for `!reference-all`
+
+`!reference-all` applies **silent-omission semantics** when individual glob matches fall outside the allowed path set. Disallowed paths are filtered out *before* any file is opened (security invariant: disallowed file contents are never loaded into memory). The result is the subset of glob matches that are both reachable and allowed:
+
+| Scenario | Behaviour | Exit |
+|---|---|---|
+| Glob matches zero files | Returns `[]` | `rc=0` |
+| Some matched files are outside `allow_paths` | Disallowed files are silently dropped; remaining files are returned | `rc=0` |
+| All matched files are outside `allow_paths` | Returns `[]` | `rc=0` |
+| Glob pattern is absolute (starts with `/`) | Hard error – `ValueError` raised | `rc=1` |
+| A matched file is the calling file (self-reference) | Hard error – circularity `ValueError` raised | `rc=1` |
+| A matched file transitively references the caller | Hard error – circularity `ValueError` raised | `rc=1` |
+
+This design keeps `!reference-all` resilient against partially-populated directory trees while still enforcing absolute-path and circularity invariants as hard failures.
 
 ### Absolute path restrictions
 

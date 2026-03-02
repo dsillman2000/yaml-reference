@@ -155,11 +155,73 @@ def test_allow_paths_load_yaml_with_references(stage_files):
     )
     assert data["all"][0]["outside"] == "outside_value"
 
-    # Test with allow_paths that doesn't include the referenced file (should fail, !reference-all)
-    with pytest.raises(PermissionError):
-        load_yaml_with_references(
-            stg / "inner/with_all.yml", allow_paths=[stg / "some"]
-        )
+    # Test with allow_paths that doesn't include the referenced file (!reference-all):
+    # disallowed files are silently omitted, so the result is an empty list.
+    data = load_yaml_with_references(
+        stg / "inner/with_all.yml", allow_paths=[stg / "some"]
+    )
+    assert data["all"] == []
+
+
+def test_reference_all_empty_glob(stage_files):
+    """Test that !reference-all returns [] without error when glob matches no files."""
+    files = {
+        "test.yml": "data: !reference-all { glob: ./nonexistent/*.yml }",
+    }
+    stg = stage_files(files)
+    data = load_yaml_with_references(stg / "test.yml")
+    assert data["data"] == []
+
+
+def test_reference_all_silently_omits_disallowed_paths(stage_files):
+    """Test that !reference-all silently omits files outside the allowed paths.
+
+    Relative-path violations (glob matches beyond the allowed directory tree) must be
+    dropped *before* reading the file (security invariant) and must NOT trigger an
+    error; the result is simply the subset of paths that are allowed.
+    """
+    files = {
+        # test.yml lives in sub/; globs into ../chapters/ which is outside sub/
+        "sub/test.yml": "data: !reference-all { glob: ../chapters/*.yml }",
+        "chapters/file1.yml": "val: 1",
+        "chapters/file2.yml": "val: 2",
+    }
+    stg = stage_files(files)
+
+    # allow_paths=[stg/"other"] => effective = [stg/"other", stg/"sub"].
+    # Neither covers stg/"chapters", so all matches are silently omitted.
+    data = load_yaml_with_references(stg / "sub/test.yml", allow_paths=[stg / "other"])
+    assert data["data"] == []
+
+    # When we explicitly allow chapters/, both files are included.
+    data = load_yaml_with_references(
+        stg / "sub/test.yml", allow_paths=[stg / "chapters"]
+    )
+    assert len(data["data"]) == 2
+    assert {"val": 1} in data["data"]
+    assert {"val": 2} in data["data"]
+
+
+def test_reference_all_partial_disallow(stage_files):
+    """Test that !reference-all includes only the allowed subset of glob matches.
+
+    When a glob expands to paths spanning multiple directories and only some of those
+    directories are in allow_paths, the disallowed paths are silently omitted while the
+    allowed paths are still included in the result.
+    """
+    files = {
+        "sub/test.yml": "data: !reference-all { glob: ../*/file.yml }",
+        "allowed/file.yml": "kind: allowed",
+        "blocked/file.yml": "kind: blocked",
+    }
+    stg = stage_files(files)
+
+    # Only stg/"allowed" is in allow_paths (plus the default stg/"sub").
+    # stg/"blocked"/file.yml is not covered, so it is silently omitted.
+    data = load_yaml_with_references(
+        stg / "sub/test.yml", allow_paths=[stg / "allowed"]
+    )
+    assert data["data"] == [{"kind": "allowed"}]
 
 
 @pytest.mark.parametrize(
