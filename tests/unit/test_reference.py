@@ -46,6 +46,17 @@ def test_reference_load(stage_files):
     assert data["contents"]["another_inner"]["another_inner2"]["leaf"] == "leaf_value"
 
 
+def test_reference_load_shorthand(stage_files):
+    files = {
+        "test.yml": "hello: world\ncontents: !reference ./inner.yml",
+        "inner.yml": "inner: inner_value\ninner_list:\n  - inner_list_value_1\n  - inner_list_value_2",
+    }
+    stg = stage_files(files)
+    data = load_yaml_with_references(stg / "test.yml")
+    assert data["hello"] == "world"
+    assert data["contents"]["inner"] == "inner_value"
+
+
 def test_reference_all_load(stage_files):
     files = {
         "test.yml": "hello: world\ncontents: !reference-all { glob: ./chapters/*.yml }",
@@ -76,6 +87,22 @@ def test_reference_all_load(stage_files):
     assert {"chapter2_summary": 2} in data["inner"]["open"]
 
 
+def test_reference_all_load_shorthand(stage_files):
+    files = {
+        "test.yml": "hello: world\ncontents: !reference-all ./chapters/*.yml",
+        "chapters/chapter1.yml": "chapter_value: 1\n",
+        "chapters/chapter2.yml": "chapter_value: 2\n",
+        "chapters/chapter3.yml": "chapter_value: 3\n",
+    }
+    stg = stage_files(files)
+    data = load_yaml_with_references(stg / "test.yml")
+    assert data["hello"] == "world"
+    assert len(data["contents"]) == 3
+    assert {"chapter_value": 1} in data["contents"]
+    assert {"chapter_value": 2} in data["contents"]
+    assert {"chapter_value": 3} in data["contents"]
+
+
 def test_parse_references(stage_files):
     files = {
         "test.yml": "inner: !reference { path: next/open.yml }\n",
@@ -100,6 +127,30 @@ def test_parse_references(stage_files):
     assert isinstance(data["open"], ReferenceAll)
     assert data["open"].glob == "../chapters/*/summary.yml"
     assert data["open"].location == str((stg / "next/open.yml").absolute())
+
+
+def test_parse_reference_shorthand(stage_files):
+    files = {
+        "test.yml": "inner: !reference next/open.yml\n",
+    }
+    stg = stage_files(files)
+    data = parse_yaml_with_references(stg / "test.yml")
+    assert isinstance(data["inner"], Reference)
+    assert data["inner"].path == "next/open.yml"
+    assert data["inner"].anchor is None
+    assert data["inner"].location == str((stg / "test.yml").absolute())
+
+
+def test_parse_reference_all_shorthand(stage_files):
+    files = {
+        "test.yml": "inner: !reference-all next/*.yml\n",
+    }
+    stg = stage_files(files)
+    data = parse_yaml_with_references(stg / "test.yml")
+    assert isinstance(data["inner"], ReferenceAll)
+    assert data["inner"].glob == "next/*.yml"
+    assert data["inner"].anchor is None
+    assert data["inner"].location == str((stg / "test.yml").absolute())
 
 
 def test_disallow_absolute_path_references(stage_files):

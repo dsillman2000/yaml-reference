@@ -1,6 +1,6 @@
 # yaml-reference
 
-Using `ruamel.yaml`, support cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, and `!merge`.
+Using `ruamel.yaml`, support cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore`.
 
 Install the package from PyPI with:
 
@@ -14,9 +14,9 @@ uv add yaml-reference
 ```
 
 ## Spec
-![Spec Status](https://img.shields.io/badge/spec%20v0.2.6--4-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.6-4)
+![Spec Status](https://img.shields.io/badge/spec%20v0.2.8--0-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.8-0)
 
-This Python library implements the YAML specification for cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, and `!merge` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
+This Python library implements the YAML specification for cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
 ## Example
 
@@ -24,15 +24,13 @@ This Python library implements the YAML specification for cross-file references 
 # root.yaml
 version: "3.1"
 services:
-  - !reference
-    path: "services/website.yaml"
+  - !reference "services/website.yaml"
 
   - !reference
     path: "services/database.yaml"
 
 networkConfigs:
-  !reference-all
-  glob: "networks/*.yaml"
+  !reference-all "networks/*.yaml"
 
 tags: !flatten
   - !reference { path: "common/tags.yaml" }
@@ -42,6 +40,14 @@ tags: !flatten
 config: !merge
   - !reference { path: "config/defaults.yaml" }
   - !reference { path: "config/overrides.yaml" }
+
+.anchors: !ignore
+  commonTags: &commonTags
+    - common:http
+    - common:security
+  dbDefaults: &dbDefaults
+    host: localhost
+    port: 5432
 
 ```
 
@@ -72,6 +78,46 @@ print(data["networkConfigs"])
 # With path restrictions for security
 data = parse_yaml_with_references("root.yaml", allow_paths=["/allowed/path"])
 ```
+
+For `!reference` and `!reference-all`, both mapping and scalar shorthand forms are supported. These are equivalent:
+
+```yaml
+# Scalar shorthand
+service: !reference "services/api.yaml"
+
+# Mapping form
+service: !reference { path: "services/api.yaml" }
+
+# Scalar shorthand
+networks: !reference-all "networks/*.yaml"
+
+# Mapping form
+networks: !reference-all { glob: "networks/*.yaml" }
+```
+
+Use the mapping form when you need optional arguments such as `anchor`; use the scalar shorthand when you only need `path` or `glob`.
+
+### The `!ignore` Tag
+
+The `!ignore` tag marks YAML content that should be parsed but omitted from the final resolved output. The most common use case is a hidden section of reusable anchors that should remain available for aliases elsewhere in the document without being emitted in the resolved result.
+
+```yaml
+.anchors: !ignore
+  commonLabels: &commonLabels
+    app: payments
+    team: platform
+  defaultResources: &defaultResources
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+
+service:
+  metadata:
+    labels: *commonLabels
+  resources: *defaultResources
+```
+
+When loaded with `load_yaml_with_references`, the `.anchors` key is removed entirely, but the anchors it defined remain usable by aliases elsewhere in the document.
 
 ### The `!merge` Tag
 
@@ -151,20 +197,25 @@ Note that the `app_name` and `cache_settings` fields from `config.yaml` are not 
 
 ### VSCode squigglies
 
-To get rid of red squigglies in VSCode when using the `!reference`, `!reference-all`, `!flatten`, and `!merge` tags, you can add the following to your `settings.json` file:
+To get rid of red squigglies in VSCode when using the `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore` tags, you can add the following to your `settings.json` file:
 
 ```json
     "yaml.customTags": [
+        "!reference scalar",
         "!reference mapping",
+        "!reference-all scalar",
         "!reference-all mapping",
         "!flatten sequence",
-        "!merge sequence"
+        "!merge sequence",
+        "!ignore scalar",
+        "!ignore sequence",
+        "!ignore mapping"
     ]
 ```
 
 ## CLI interface
 
-There is a CLI interface for this package which can be used to read a YAML file which contains `!reference` tags and dump its contents as pretty-printed JSON with references expanded. This is useful for generating a single file for deployment or other purposes. Note that the keys of mappings will be sorted alphabetically. This CLI interface is used to test the contract of this package against the `yaml-reference-specs` project.
+There is a CLI interface for this package which can be used to read a YAML file which contains composition tags such as `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore`, and dump its contents as pretty-printed JSON with references expanded and ignored content removed. This is useful for generating a single file for deployment or other purposes. Note that the keys of mappings will be sorted alphabetically. This CLI interface is used to test the contract of this package against the `yaml-reference-specs` project.
 
 ```bash
 $ yaml-reference-cli -h
