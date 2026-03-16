@@ -649,6 +649,22 @@ def prune_ignores(data: Any) -> Any:
     """
     if isinstance(data, Ignore):
         return None
+    if isinstance(data, Flatten):
+        return Flatten(
+            sequence=[
+                prune_ignores(item)
+                for item in data.sequence
+                if not isinstance(item, Ignore)
+            ]
+        )
+    if isinstance(data, Merge):
+        return Merge(
+            sequence=[
+                prune_ignores(item)
+                for item in data.sequence
+                if not isinstance(item, Ignore)
+            ]
+        )
     if isinstance(data, list):
         return [prune_ignores(item) for item in data if not isinstance(item, Ignore)]
     elif isinstance(data, dict):

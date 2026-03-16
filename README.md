@@ -119,6 +119,8 @@ service:
 
 When loaded with `load_yaml_with_references`, the `.anchors` key is removed entirely, but the anchors it defined remain usable by aliases elsewhere in the document.
 
+Ignored items are also pruned before `!flatten` and `!merge` are evaluated, so an ignored sequence entry inside either tag is simply omitted from the flattened or merged result.
+
 ### The `!merge` Tag
 
 The `!merge` tag combines multiple YAML mappings (dictionaries) into a single mapping. This is useful for composing configuration from multiple sources or applying overrides. When you use `!merge`, you provide a sequence of mappings that will be merged together, with later mappings overriding keys from earlier ones.

@@ -197,6 +197,21 @@ def test_flatten_with_scalars(stage_files):
     assert data["data"] == [1, 2, 3, 4, 5, 6, 7]
 
 
+def test_flatten_ignores_ignored_sequence_items(stage_files):
+    """Test that !ignore items inside a !flatten sequence are omitted from the flattened result."""
+    files = {
+        "test.yml": """
+data: !flatten
+  - [1, 2]
+  - !ignore [99, 100]
+  - [3, 4]
+""",
+    }
+    stg = stage_files(files)
+    data = load_yaml_with_references(stg / "test.yml")
+    assert data["data"] == [1, 2, 3, 4]
+
+
 def test_flatten_mixed_objects_references(stage_files):
     """Test flattening a sequence of objects, references, and reference-all tags."""
     files = {

@@ -124,6 +124,21 @@ result: !merge
     assert data["result"] == {"a": 1, "b": 2, "inner": {"x": 2, "y": 1}}
 
 
+def test_merge_ignores_ignored_sequence_items(stage_files):
+    """Test that !ignore items inside a !merge sequence are omitted before merging."""
+    files = {
+        "test.yml": """
+result: !merge
+  - {a: 1}
+  - !ignore {ignored: true}
+  - {b: 2}
+""",
+    }
+    stg = stage_files(files)
+    data = load_yaml_with_references(stg / "test.yml")
+    assert data["result"] == {"a": 1, "b": 2}
+
+
 def test_flatten_and_merge(stage_files):
     """Test flattening and merging together."""
 
