@@ -2,6 +2,7 @@ import json
 import sys
 from pathlib import Path
 
+from ruamel.yaml.error import YAMLError
 from yaml_reference import load_yaml_with_references
 
 
@@ -33,7 +34,7 @@ def compile_main(input_file: str, allow_paths: list[str] = []):
             file=sys.stderr,
         )
         sys.exit(1)
-    except (FileNotFoundError, ValueError) as err:
+    except (FileNotFoundError, ValueError, YAMLError) as err:
         print(
             f'Error: Failed to compile "{input_path}":\n{err}',
             file=sys.stderr,

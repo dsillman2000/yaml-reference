@@ -415,7 +415,7 @@ def _extract_anchor_from_parser_events(
 def _parse_yaml_documents(
     file_path: PathLike,
     anchor: Optional[str] = None,
-    allow_paths: Sequence[PathLike] = [],
+    allow_paths: Optional[Sequence[PathLike]] = None,
 ) -> MultiDocument:
     if not allow_paths:
         allow_paths = [Path(file_path).parent.absolute()]
@@ -452,7 +452,7 @@ def _parse_yaml_documents(
 def parse_yaml_with_references(
     file_path: PathLike,
     anchor: Optional[str] = None,
-    allow_paths: Sequence[PathLike] = [],
+    allow_paths: Optional[Sequence[PathLike]] = None,
 ) -> Any:
     """
     Interface method for reading a YAML file into memory which contains references. References are not resolved in the
@@ -781,11 +781,13 @@ def prune_ignores(data: Any) -> Any:
 
         pruned_documents = []
         for item in data.documents:
+            # For multi-document streams, only omit documents explicitly tagged !ignore.
+            # Preserve documents that prune to None (e.g., explicit null/empty documents)
+            # so that document count and ordering remain stable.
             if isinstance(item, Ignore):
                 continue
             pruned_item = prune_ignores(item)
-            if pruned_item is not None:
-                pruned_documents.append(pruned_item)
+            pruned_documents.append(pruned_item)
         return MultiDocument(documents=pruned_documents, is_multi_document=True)
     if isinstance(data, Ignore):
         return None
