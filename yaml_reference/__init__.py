@@ -1,6 +1,7 @@
 import io
 import os
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any, Optional, Sequence, Union
 
@@ -252,7 +253,30 @@ class Merge:
         return cls(seq)
 
 
+@dataclass
+class MultiDocument:
+    documents: list[Any]
+    is_multi_document: bool
+
+    def __repr__(self):
+        return (
+            "MultiDocument("
+            f"documents={self.documents!r}, is_multi_document={self.is_multi_document!r}"
+            ")"
+        )
+
+
 PathLike = Union[str, Path, os.PathLike]
+
+
+def _build_yaml_loader() -> YAML:
+    yaml = YAML(typ="safe")
+    yaml.register_class(Reference)
+    yaml.register_class(ReferenceAll)
+    yaml.register_class(Flatten)
+    yaml.register_class(Merge)
+    yaml.register_class(Ignore)
+    return yaml
 
 
 def _check_file_path(path: PathLike, allow_paths: Sequence[PathLike]) -> Path:
@@ -273,11 +297,35 @@ def _check_file_path(path: PathLike, allow_paths: Sequence[PathLike]) -> Path:
     raise PermissionError(f"File '{path}' is not allowed.")
 
 
-def _extract_anchor_from_parser_events(yaml: YAML, stream: IO, anchor: str) -> Any:
+def _collect_document_event_streams(yaml: YAML, stream: IO) -> list[list[events.Event]]:
+    document_streams = []
+    current_document = None
+    for event in yaml.parse(stream):
+        if isinstance(event, events.DocumentStartEvent):
+            current_document = [events.StreamStartEvent(), event]
+        elif isinstance(event, events.DocumentEndEvent):
+            if current_document is None:
+                current_document = [
+                    events.StreamStartEvent(),
+                    events.DocumentStartEvent(),
+                ]
+            current_document.append(event)
+            current_document.append(events.StreamEndEvent())
+            document_streams.append(current_document)
+            current_document = None
+        elif not isinstance(event, (events.StreamStartEvent, events.StreamEndEvent)):
+            if current_document is not None:
+                current_document.append(event)
+    return document_streams
+
+
+def _extract_anchor_from_parser_events(
+    yaml: YAML, parsed_events: Sequence[events.Event], anchor: str
+) -> Any:
     anchor_lookup = dict()
     level_lookup = defaultdict(int)
     _nonzero_keys = lambda dd: [key for key, value in dd.items() if value > 0]  # noqa: E731
-    for event in yaml.parse(stream):
+    for event in parsed_events:
         if (
             hasattr(event, "anchor")
             and event.anchor is not None
@@ -360,8 +408,45 @@ def _extract_anchor_from_parser_events(yaml: YAML, stream: IO, anchor: str) -> A
         )
         raise ValueError(msg)
     strio.seek(0)
-    document = yaml.load(strio)
+    document = _build_yaml_loader().load(strio)
     return document
+
+
+def _parse_yaml_documents(
+    file_path: PathLike,
+    anchor: Optional[str] = None,
+    allow_paths: Sequence[PathLike] = [],
+) -> MultiDocument:
+    if not allow_paths:
+        allow_paths = [Path(file_path).parent.absolute()]
+    path: Path = _check_file_path(file_path, allow_paths=allow_paths)
+
+    if anchor is None:
+        yaml = _build_yaml_loader()
+        with path.open("r") as f:
+            parsed_documents = list(yaml.load_all(f))
+    else:
+        yaml = _build_yaml_loader()
+        with path.open("r") as f:
+            document_streams = _collect_document_event_streams(yaml, f)
+        if not document_streams:
+            raise ValueError(f"Anchor '{anchor}' not found in the YAML document.")
+        parsed_documents = [
+            _extract_anchor_from_parser_events(yaml, document_stream, anchor)
+            for document_stream in document_streams
+        ]
+
+    if not parsed_documents:
+        parsed_documents = [None]
+
+    parsed_documents = [
+        _recursively_attribute_location_to_references(document, path)
+        for document in parsed_documents
+    ]
+    return MultiDocument(
+        documents=parsed_documents,
+        is_multi_document=len(parsed_documents) > 1,
+    )
 
 
 def parse_yaml_with_references(
@@ -386,29 +471,25 @@ def parse_yaml_with_references(
         ValueError: If the file is not a valid YAML file.
 
     """
-    if not allow_paths:
-        allow_paths = [Path(file_path).parent.absolute()]
-    path: Path = _check_file_path(file_path, allow_paths=allow_paths)
-
-    yaml = YAML(typ="safe")
-    yaml.register_class(Reference)
-    yaml.register_class(ReferenceAll)
-    yaml.register_class(Flatten)
-    yaml.register_class(Merge)
-    yaml.register_class(Ignore)
-
-    if not anchor:
-        with path.open("r") as f:
-            parsed = yaml.load(f)
-    else:
-        with path.open("r") as f:
-            parsed = _extract_anchor_from_parser_events(yaml, f, anchor)
-
-    parsed = _recursively_attribute_location_to_references(parsed, path)
+    parsed = _parse_yaml_documents(
+        file_path,
+        anchor=anchor,
+        allow_paths=allow_paths,
+    )
+    if not parsed.is_multi_document and len(parsed.documents) == 1:
+        return parsed.documents[0]
     return parsed
 
 
 def _recursively_attribute_location_to_references(data: Any, base_path: Path):
+    if isinstance(data, MultiDocument):
+        return MultiDocument(
+            documents=[
+                _recursively_attribute_location_to_references(item, base_path)
+                for item in data.documents
+            ],
+            is_multi_document=data.is_multi_document,
+        )
     if isinstance(data, Flatten):
         return Flatten(
             sequence=[
@@ -514,6 +595,17 @@ def _recursively_resolve_references(
     if visited_paths is None:
         visited_paths = set()
 
+    if isinstance(data, MultiDocument):
+        return MultiDocument(
+            documents=[
+                _recursively_resolve_references(
+                    item, allow_paths=allow_paths, visited_paths=visited_paths
+                )
+                for item in data.documents
+            ],
+            is_multi_document=data.is_multi_document,
+        )
+
     if isinstance(data, Flatten):
         return Flatten(
             sequence=[
@@ -547,11 +639,18 @@ def _recursively_resolve_references(
         # Check for circular reference and track path
         _check_and_track_path(abs_path, visited_paths)
 
-        parsed = parse_yaml_with_references(
+        parsed = _parse_yaml_documents(
             abs_path, anchor=data.anchor, allow_paths=allow_paths
         )
+
+        if len(parsed.documents) != 1:
+            visited_paths.remove(abs_path)
+            raise ValueError(
+                f"Referenced file '{abs_path}' contains multiple YAML documents and cannot be used with !reference."
+            )
+
         resolved = _recursively_resolve_references(
-            parsed, allow_paths=allow_paths, visited_paths=visited_paths
+            parsed.documents[0], allow_paths=allow_paths, visited_paths=visited_paths
         )
 
         # Remove current path from visited set after processing
@@ -587,13 +686,16 @@ def _recursively_resolve_references(
             # Check for circular reference and track path
             _check_and_track_path(path, visited_paths)
 
-            parsed = parse_yaml_with_references(
+            parsed = _parse_yaml_documents(
                 path, anchor=data.anchor, allow_paths=allow_paths
             )
             resolved = _recursively_resolve_references(
                 parsed, allow_paths=allow_paths, visited_paths=visited_paths
             )
-            resolved_items.append(resolved)
+            if isinstance(resolved, MultiDocument):
+                resolved_items.extend(resolved.documents)
+            else:
+                resolved_items.append(resolved)
 
             # Remove current path from visited set after processing
             visited_paths.remove(path)
@@ -623,6 +725,11 @@ def flatten_sequences(data: Any) -> Any:
     Given an object which may contain Flatten(...) objects which was parsed from a YAML document containing !flatten
     tags, return the object without any Flatten(...) objects, but having flattened all sequences marked with them.
     """
+    if isinstance(data, MultiDocument):
+        return MultiDocument(
+            documents=[flatten_sequences(item) for item in data.documents],
+            is_multi_document=data.is_multi_document,
+        )
     if isinstance(data, Flatten):
         return data.flattened()
     if isinstance(data, Merge):
@@ -641,6 +748,11 @@ def merge_mappings(data: Any) -> Any:
     Given an object which may contain Merge(...) objects which was parsed from a YAML document containing !merge
     tags, return the object without any Merge(...) objects, but having merged all mappings marked with them.
     """
+    if isinstance(data, MultiDocument):
+        return MultiDocument(
+            documents=[merge_mappings(item) for item in data.documents],
+            is_multi_document=data.is_multi_document,
+        )
     if isinstance(data, Merge):
         return merge_mappings(data.merged())
     if isinstance(data, list):
@@ -658,6 +770,23 @@ def prune_ignores(data: Any) -> Any:
     removed from the list. If an Ignore(...) object is found as a value in a dict, the key-value pair is removed from
     the dict. If an Ignore(...) object is found as a value which is not in a list or dict, it is replaced with None.
     """
+    if isinstance(data, MultiDocument):
+        if not data.is_multi_document:
+            if not data.documents:
+                return MultiDocument(documents=[None], is_multi_document=False)
+            return MultiDocument(
+                documents=[prune_ignores(data.documents[0])],
+                is_multi_document=False,
+            )
+
+        pruned_documents = []
+        for item in data.documents:
+            if isinstance(item, Ignore):
+                continue
+            pruned_item = prune_ignores(item)
+            if pruned_item is not None:
+                pruned_documents.append(pruned_item)
+        return MultiDocument(documents=pruned_documents, is_multi_document=True)
     if isinstance(data, Ignore):
         return None
     if isinstance(data, Flatten):
@@ -715,7 +844,7 @@ def load_yaml_with_references(
         allow_paths = []
     allow_paths += [Path(file_path).parent.absolute()]
     path = _check_file_path(file_path, allow_paths=allow_paths)
-    parsed = parse_yaml_with_references(path, allow_paths=allow_paths)
+    parsed = _parse_yaml_documents(path, allow_paths=allow_paths)
 
     # Initialize visited paths with the root file to detect self-references
     visited_paths = {path.resolve()}
@@ -732,6 +861,14 @@ def load_yaml_with_references(
     pruned = prune_ignores(resolved)
     flattened = flatten_sequences(pruned)
     merged = merge_mappings(flattened)
+    if isinstance(merged, MultiDocument):
+        if merged.is_multi_document:
+            return merged.documents
+        if not merged.documents:
+            return None
+        if len(merged.documents) == 1:
+            return merged.documents[0]
+        return None
     return merged
 
 
@@ -742,6 +879,7 @@ __all__ = [
     "Flatten",
     "merge_mappings",
     "Merge",
+    "MultiDocument",
     "prune_ignores",
     "Ignore",
 ]

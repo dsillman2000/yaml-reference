@@ -57,6 +57,20 @@ def test_reference_load_shorthand(stage_files):
     assert data["contents"]["inner"] == "inner_value"
 
 
+def test_reference_rejects_multi_document_target(stage_files):
+    files = {
+        "test.yml": "contents: !reference { path: ./multi.yml }",
+        "multi.yml": "---\nvalue: 1\n---\nvalue: 2\n",
+    }
+    stg = stage_files(files)
+
+    with pytest.raises(
+        ValueError,
+        match="contains multiple YAML documents and cannot be used with !reference",
+    ):
+        load_yaml_with_references(stg / "test.yml")
+
+
 def test_reference_all_load(stage_files):
     files = {
         "test.yml": "hello: world\ncontents: !reference-all { glob: ./chapters/*.yml }",
@@ -101,6 +115,66 @@ def test_reference_all_load_shorthand(stage_files):
     assert {"chapter_value": 1} in data["contents"]
     assert {"chapter_value": 2} in data["contents"]
     assert {"chapter_value": 3} in data["contents"]
+
+
+def test_reference_all_expands_multi_document_file(stage_files):
+    files = {
+        "test.yml": "contents: !reference-all { glob: ./multi.yml }",
+        "multi.yml": "---\nvalue: 1\n---\nvalue: 2\n",
+    }
+    stg = stage_files(files)
+
+    data = load_yaml_with_references(stg / "test.yml")
+
+    assert data["contents"] == [{"value": 1}, {"value": 2}]
+
+
+def test_reference_all_mixed_single_and_multi_document_order(stage_files):
+    files = {
+        "test.yml": "contents: !reference-all { glob: ./parts/*.yml }",
+        "parts/a.yml": "value: a\n",
+        "parts/b.yml": "---\nvalue: b1\n---\nvalue: b2\n",
+        "parts/c.yml": "value: c\n",
+    }
+    stg = stage_files(files)
+
+    data = load_yaml_with_references(stg / "test.yml")
+
+    assert data["contents"] == [
+        {"value": "a"},
+        {"value": "b1"},
+        {"value": "b2"},
+        {"value": "c"},
+    ]
+
+
+def test_reference_all_skips_ignored_root_documents_in_multi_document_file(stage_files):
+    files = {
+        "test.yml": "contents: !reference-all { glob: ./multi.yml }",
+        "multi.yml": "--- !ignore\nignored: true\n---\nvalue: kept\n",
+    }
+    stg = stage_files(files)
+
+    data = load_yaml_with_references(stg / "test.yml")
+
+    assert data["contents"] == [{"value": "kept"}]
+
+
+def test_reference_all_anchor_extracts_from_every_document(stage_files):
+    files = {
+        "test.yml": "contents: !reference-all { glob: ./parts/*.yml, anchor: item }",
+        "parts/a.yml": "---\nroot: &item {value: 1}\n---\nroot: &item {value: 2}\n",
+        "parts/b.yml": "root: &item {value: 3}\n",
+    }
+    stg = stage_files(files)
+
+    data = load_yaml_with_references(stg / "test.yml")
+
+    assert data["contents"] == [
+        {"value": 1},
+        {"value": 2},
+        {"value": 3},
+    ]
 
 
 def test_parse_references(stage_files):

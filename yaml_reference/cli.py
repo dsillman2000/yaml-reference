@@ -33,6 +33,12 @@ def compile_main(input_file: str, allow_paths: list[str] = []):
             file=sys.stderr,
         )
         sys.exit(1)
+    except (FileNotFoundError, ValueError) as err:
+        print(
+            f'Error: Failed to compile "{input_path}":\n{err}',
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     json.dump(data, sys.stdout, sort_keys=True, indent=2)
 

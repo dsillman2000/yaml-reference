@@ -97,6 +97,15 @@ networks: !reference-all { glob: "networks/*.yaml" }
 
 Use the mapping form when you need optional arguments such as `anchor`; use the scalar shorthand when you only need `path` or `glob`.
 
+### Multi-Document YAML
+
+yaml-reference distinguishes between a single YAML document whose root value is a sequence and a YAML file that contains multiple documents separated by `---`.
+
+- `!reference` requires the target file to contain exactly one YAML document. If the referenced file contains multiple documents, loading fails with a `ValueError`.
+- `!reference-all` expands matched files document-by-document. A single-document file contributes one list element, while a multi-document file contributes one element per document in document order.
+- When `anchor` is used with `!reference-all`, the anchored value is extracted from every document in each matched file, preserving file order and then document order.
+- If the root input file contains multiple documents, `load_yaml_with_references()` returns a Python list with one resolved output element per document. Root documents tagged with `!ignore` are omitted entirely.
+
 ### The `!ignore` Tag
 
 The `!ignore` tag marks YAML content that should be parsed but omitted from the final resolved output. The most common use case is a hidden section of reusable anchors that should remain available for aliases elsewhere in the document without being emitted in the resolved result.
