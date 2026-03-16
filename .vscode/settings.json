@@ -1,8 +1,13 @@
 {
     "yaml.customTags": [
         "!reference mapping",
+        "!reference scalar",
         "!reference-all mapping",
+        "!reference-all scalar",
         "!flatten sequence",
-        "!merge sequence"
+        "!merge sequence",
+        "!ignore scalar",
+        "!ignore mapping",
+        "!ignore sequence"
     ]
 }
