@@ -104,7 +104,7 @@ class Ignore:
     parsed but effectively discarded in the final output.
 
     Args:
-        yaml_tag (str): The YAML tag associated with this class, set to `!ignore`.
+        content (Any): The YAML content associated with this tag that should be ignored.
     """
 
     content: Any
@@ -118,7 +118,18 @@ class Ignore:
 
     @classmethod
     def from_yaml(cls, constructor, node):
-        content = constructor.construct_object(node)
+        # Construct the underlying content based on the node type instead of
+        # calling construct_object(node), which can recurse back into this
+        # method or yield partially constructed placeholders with ruamel.yaml.
+        if node.id == "scalar":
+            content = constructor.construct_scalar(node)
+        elif node.id == "sequence":
+            content = constructor.construct_sequence(node)
+        elif node.id == "mapping":
+            content = constructor.construct_mapping(node)
+        else:
+            # Fallback for any unexpected node types.
+            content = constructor.construct_object(node)
         return cls(content)
 
 

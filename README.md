@@ -1,6 +1,6 @@
 # yaml-reference
 
-Using `ruamel.yaml`, support cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore`.
+Using `ruamel.yaml`, yaml-reference supports cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore`.
 
 Install the package from PyPI with:
 
