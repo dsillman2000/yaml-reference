@@ -14,7 +14,7 @@ uv add yaml-reference
 ```
 
 ## Spec
-![Spec Status](https://img.shields.io/badge/spec%20v0.2.8--0-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.8-0)
+![Spec Status](https://img.shields.io/badge/spec%20v0.2.8--1-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.8-1)
 
 This Python library implements the YAML specification for cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
