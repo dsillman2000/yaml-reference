@@ -44,6 +44,8 @@ class Reference:
 
     @classmethod
     def from_yaml(cls, constructor, node):
+        if node.id == "scalar":
+            return cls(constructor.construct_scalar(node))
         mapping = constructor.construct_mapping(node)
         path = mapping["path"]
         anchor = mapping.get("anchor")
@@ -86,10 +88,49 @@ class ReferenceAll:
 
     @classmethod
     def from_yaml(cls, constructor, node):
+        if node.id == "scalar":
+            return cls(constructor.construct_scalar(node))
         mapping = constructor.construct_mapping(node)
         glob = mapping["glob"]
         anchor = mapping.get("anchor")
         return cls(glob, anchor)
+
+
+class Ignore:
+    """Represents an ignore marker for YAML content.
+
+    This class is used as a marker for YAML content that should be ignored and is registered
+    with ruamel.yaml to handle the `!ignore` tag. Any content marked with `!ignore` will be
+    parsed but effectively discarded in the final output.
+
+    Args:
+        content (Any): The YAML content associated with this tag that should be ignored.
+    """
+
+    content: Any
+    yaml_tag = "!ignore"
+
+    def __init__(self, content: Any):
+        self.content = content
+
+    def __repr__(self):
+        return f"Ignore(content={repr(self.content)})"
+
+    @classmethod
+    def from_yaml(cls, constructor, node):
+        # Construct the underlying content based on the node type instead of
+        # calling construct_object(node), which can recurse back into this
+        # method or yield partially constructed placeholders with ruamel.yaml.
+        if node.id == "scalar":
+            content = constructor.construct_scalar(node)
+        elif node.id == "sequence":
+            content = constructor.construct_sequence(node)
+        elif node.id == "mapping":
+            content = constructor.construct_mapping(node)
+        else:
+            # Fallback for any unexpected node types.
+            content = constructor.construct_object(node)
+        return cls(content)
 
 
 class Flatten:
@@ -354,6 +395,7 @@ def parse_yaml_with_references(
     yaml.register_class(ReferenceAll)
     yaml.register_class(Flatten)
     yaml.register_class(Merge)
+    yaml.register_class(Ignore)
 
     if not anchor:
         with path.open("r") as f:
@@ -373,6 +415,12 @@ def _recursively_attribute_location_to_references(data: Any, base_path: Path):
                 _recursively_attribute_location_to_references(item, base_path)
                 for item in data.sequence
             ]
+        )
+    if isinstance(data, Ignore):
+        return Ignore(
+            content=_recursively_attribute_location_to_references(
+                data.content, base_path
+            )
         )
     if isinstance(data, Merge):
         return Merge(
@@ -474,6 +522,13 @@ def _recursively_resolve_references(
                 )
                 for item in data.sequence
             ]
+        )
+
+    if isinstance(data, Ignore):
+        return Ignore(
+            content=_recursively_resolve_references(
+                data.content, allow_paths=allow_paths, visited_paths=visited_paths
+            )
         )
 
     if isinstance(data, Merge):
@@ -596,6 +651,43 @@ def merge_mappings(data: Any) -> Any:
         return data
 
 
+def prune_ignores(data: Any) -> Any:
+    """
+    Given an object which may contain Ignore(...) objects which was parsed from a YAML document containing !ignore
+    tags, return the object with all Ignore(...) objects removed. If an Ignore(...) object is found in a list, it is
+    removed from the list. If an Ignore(...) object is found as a value in a dict, the key-value pair is removed from
+    the dict. If an Ignore(...) object is found as a value which is not in a list or dict, it is replaced with None.
+    """
+    if isinstance(data, Ignore):
+        return None
+    if isinstance(data, Flatten):
+        return Flatten(
+            sequence=[
+                prune_ignores(item)
+                for item in data.sequence
+                if not isinstance(item, Ignore)
+            ]
+        )
+    if isinstance(data, Merge):
+        return Merge(
+            sequence=[
+                prune_ignores(item)
+                for item in data.sequence
+                if not isinstance(item, Ignore)
+            ]
+        )
+    if isinstance(data, list):
+        return [prune_ignores(item) for item in data if not isinstance(item, Ignore)]
+    elif isinstance(data, dict):
+        return {
+            key: prune_ignores(value)
+            for key, value in data.items()
+            if not isinstance(value, Ignore)
+        }
+    else:
+        return data
+
+
 def load_yaml_with_references(
     file_path: PathLike, allow_paths: Sequence[PathLike] = []
 ) -> Any:
@@ -633,7 +725,12 @@ def load_yaml_with_references(
         allow_paths=allow_paths,  # type: ignore
         visited_paths=visited_paths,
     )
-    flattened = flatten_sequences(resolved)
+    # Prune ignores after full resolution so that Ignore wrappers introduced by
+    # referenced files propagate up to their parent containers, allowing keys and
+    # list items whose resolved value is !ignore to be dropped entirely rather
+    # than replaced with null.
+    pruned = prune_ignores(resolved)
+    flattened = flatten_sequences(pruned)
     merged = merge_mappings(flattened)
     return merged
 
@@ -645,4 +742,6 @@ __all__ = [
     "Flatten",
     "merge_mappings",
     "Merge",
+    "prune_ignores",
+    "Ignore",
 ]
