@@ -169,3 +169,23 @@ def test_flatten_and_merge(stage_files):
     stg = stage_files(files)
     data = load_yaml_with_references(stg / "test.yml")
     assert data["result"] == [{"a": 2}, {"b": 2, "c": 3}]
+
+
+def test_merge_combined_with_multi_document_reference_all(stage_files):
+    files = {
+        "test.yml": """
+result: !merge
+  - {base: true, version: 1}
+  - !reference-all { glob: ./patches.yml }
+""",
+        "patches.yml": "---\nversion: 2\n---\nfeature: enabled\n",
+    }
+    stg = stage_files(files)
+
+    data = load_yaml_with_references(stg / "test.yml")
+
+    assert data["result"] == {
+        "base": True,
+        "version": 2,
+        "feature": "enabled",
+    }

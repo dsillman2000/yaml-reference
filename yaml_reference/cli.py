@@ -2,6 +2,7 @@ import json
 import sys
 from pathlib import Path
 
+from ruamel.yaml.error import YAMLError
 from yaml_reference import load_yaml_with_references
 
 
@@ -30,6 +31,12 @@ def compile_main(input_file: str, allow_paths: list[str] = []):
     except PermissionError as perm:
         print(
             f'Error: Permission denied while resolving references in "{input_path}":\n{perm}',
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    except (FileNotFoundError, ValueError, YAMLError) as err:
+        print(
+            f'Error: Failed to compile "{input_path}":\n{err}',
             file=sys.stderr,
         )
         sys.exit(1)

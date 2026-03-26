@@ -14,7 +14,7 @@ uv add yaml-reference
 ```
 
 ## Spec
-![Spec Status](https://img.shields.io/badge/spec%20v0.2.8--1-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.8-1)
+![Spec Status](https://img.shields.io/badge/spec%20v0.2.9--0-passing-brightgreen?link=https%3A%2F%2Fgithub.com%2Fdsillman2000%2Fyaml-reference-specs%2Ftree%2Fv0.2.9-0)
 
 This Python library implements the YAML specification for cross-file references and YAML composition in YAML files using tags `!reference`, `!reference-all`, `!flatten`, `!merge`, and `!ignore` as defined in the [yaml-reference-specs project](https://github.com/dsillman2000/yaml-reference-specs).
 
@@ -96,6 +96,15 @@ networks: !reference-all { glob: "networks/*.yaml" }
 ```
 
 Use the mapping form when you need optional arguments such as `anchor`; use the scalar shorthand when you only need `path` or `glob`.
+
+### Multi-Document YAML
+
+yaml-reference distinguishes between a single YAML document whose root value is a sequence and a YAML file that contains multiple documents separated by `---`.
+
+- `!reference` requires the target file to contain exactly one YAML document. If the referenced file contains multiple documents, loading fails with a `ValueError`.
+- `!reference-all` expands matched files document-by-document. A single-document file contributes one list element, while a multi-document file contributes one element per document in document order.
+- When `anchor` is used with `!reference-all`, the anchored value is extracted from every document in each matched file, preserving file order and then document order.
+- If the root input file contains multiple documents, `load_yaml_with_references()` returns a Python list with one resolved output element per document. Root documents tagged with `!ignore` are omitted entirely.
 
 ### The `!ignore` Tag
 

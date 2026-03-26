@@ -130,6 +130,21 @@ data: !flatten
     assert data["data"] == [1, 2, 3, 4, 5, 6]
 
 
+def test_flatten_combined_with_multi_document_reference_all(stage_files):
+    files = {
+        "main.yml": """
+data: !flatten
+    - !reference-all { glob: ./entries.yml }
+""",
+        "entries.yml": "---\n- [1, 2]\n---\n- [3, 4]\n",
+    }
+    stg = stage_files(files)
+
+    data = load_yaml_with_references(stg / "main.yml")
+
+    assert data["data"] == [1, 2, 3, 4]
+
+
 def test_parse_flatten_tag(stage_files):
     """Test that !flatten tags are parsed correctly without resolution."""
     files = {
